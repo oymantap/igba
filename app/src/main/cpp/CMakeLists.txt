@@ -4,13 +4,9 @@ project("igameboy")
 # Set C++ Standard
 set(CMAKE_CXX_STANDARD 17)
 
-# Include directories supaya header (.h) di semua subfolder terbaca
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/libretro
-    ${CMAKE_CURRENT_SOURCE_DIR}/libretro-common/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+# FIX 1: Definisikan macro INLINE secara global agar compiler C/Clang
+# tidak menganggap INLINE sebagai unknown type di file seperti sound.c
+add_compile_definitions(INLINE=inline)
 
 # Kumpulkan semua file C & C++ secara otomatis dari subfolder
 file(GLOB_RECURSE LIBRETRO_COMMON_SOURCES
@@ -35,6 +31,16 @@ add_library(
     ${NATIVE_SOURCES}
     ${CORE_SOURCES}
     ${LIBRETRO_COMMON_SOURCES}
+)
+
+# FIX 2: Perbaiki Include Directories menggunakan target_include_directories
+# Ini memastikan folder libretro-common/include terdaftar dengan benar, 
+# sekaligus menambahkan root folder agar `#include "libretro/libretro.h"` maupun `#include "libretro.h"` bisa ditemukan.
+target_include_directories(igba_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/libretro
+    ${CMAKE_CURRENT_SOURCE_DIR}/libretro-common/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Cari Android System Libraries

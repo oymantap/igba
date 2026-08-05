@@ -9,7 +9,7 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
 // Sesuai dengan header Libretro
-#include "libretro/libretro.h"
+#include "libretro.h"
 
 // Buffer frame dari callback libretro
 static uint16_t frame_buffer[240 * 160];
