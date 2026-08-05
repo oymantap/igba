@@ -1,262 +1,327 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout 
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0F0F12"
+    android:background="#0A0E17"
     tools:context=".MainActivity">
 
-    <!-- Screen Emulator GBA (Layar Game Centered 3:2 Ratio) -->
-    <com.rycl.igba.GbaView
-        android:id="@+id/gba_view"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintDimensionRatio="3:2"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- ================= TOP CONTROLS (L / R / OPEN ROM) ================= -->
-
-    <!-- Tombol L -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_l"
-        android:layout_width="100dp"
-        android:layout_height="44dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:text="L"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:backgroundTint="#33FFFFFF"
-        app:cornerRadius="12dp"
-        app:strokeColor="#66FFFFFF"
-        app:strokeWidth="1dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- Tombol Open File ROM (Floating Button Tengah-Atas) -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btn_open_rom"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:contentDescription="Open ROM"
-        android:src="@android:drawable/ic_menu_agenda"
-        app:backgroundTint="#2563EB"
-        app:fabCustomSize="44dp"
-        app:tint="#FFFFFF"
-        app:layout_constraintEnd_toStartOf="@id/btn_r"
-        app:layout_constraintStart_toEndOf="@id/btn_l"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- Tombol R -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_r"
-        android:layout_width="100dp"
-        android:layout_height="44dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="16dp"
-        android:text="R"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:backgroundTint="#33FFFFFF"
-        app:cornerRadius="12dp"
-        app:strokeColor="#66FFFFFF"
-        app:strokeWidth="1dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- ================= D-PAD AREA (KIRI BAHAH) ================= -->
-
+    <!-- ================= EMULATOR INTERFACE LAYER ================= -->
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/dpad_container"
-        android:layout_width="160dp"
-        android:layout_height="160dp"
-        android:layout_marginStart="24dp"
-        android:layout_marginBottom="24dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        android:id="@+id/emulator_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
 
-        <!-- D-Pad UP -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_up"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:text="▲"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            app:backgroundTint="#40FFFFFF"
-            app:cornerRadius="8dp"
+        <com.rycl.igba.GbaView
+            android:id="@+id/gba_view"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintDimensionRatio="3:2"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- D-Pad LEFT -->
+        <!-- Controls Upper -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_left"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:text="◀"
+            android:id="@+id/btn_l"
+            android:layout_width="90dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:text="L"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            app:backgroundTint="#40FFFFFF"
-            app:cornerRadius="8dp"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="10dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- D-Pad RIGHT -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_right"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:text="▶"
+            android:id="@+id/btn_back_ps4"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginTop="16dp"
+            android:text="PS MENU"
+            android:textSize="12sp"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            app:backgroundTint="#40FFFFFF"
-            app:cornerRadius="8dp"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:backgroundTint="#0072CE"
+            app:cornerRadius="20dp"
+            app:layout_constraintEnd_toStartOf="@id/btn_r"
+            app:layout_constraintStart_toEndOf="@id/btn_l"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_r"
+            android:layout_width="90dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="16dp"
+            android:text="R"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#33FFFFFF"
+            app:cornerRadius="10dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- D-Pad DOWN -->
+        <!-- D-PAD AREA -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/dpad_container"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginBottom="20dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_up"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="0dp"
+                android:text="▲"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#40FFFFFF"
+                app:cornerRadius="8dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_left"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="0dp"
+                android:text="◀"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#40FFFFFF"
+                app:cornerRadius="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_right"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="0dp"
+                android:text="▶"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#40FFFFFF"
+                app:cornerRadius="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_down"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="0dp"
+                android:text="▼"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#40FFFFFF"
+                app:cornerRadius="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- ACTION BUTTONS A/B -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_down"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
+            android:id="@+id/btn_b"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="90dp"
+            android:layout_marginBottom="24dp"
             android:padding="0dp"
-            android:text="▼"
+            android:text="B"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            app:backgroundTint="#40FFFFFF"
-            app:cornerRadius="8dp"
+            android:textSize="18sp"
+            app:backgroundTint="#80EF4444"
+            app:cornerRadius="30dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_a"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="64dp"
+            android:padding="0dp"
+            android:text="A"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            app:backgroundTint="#8022C55E"
+            app:cornerRadius="30dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- START & SELECT -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent">
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_select"
+                android:layout_width="70dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:padding="0dp"
+                android:text="SELECT"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                app:backgroundTint="#33FFFFFF"
+                app:cornerRadius="18dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_start"
+                android:layout_width="70dp"
+                android:layout_height="36dp"
+                android:padding="0dp"
+                android:text="START"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                app:backgroundTint="#33FFFFFF"
+                app:cornerRadius="18dp" />
+        </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- ================= ACTION BUTTONS A/B (KANAN BAWAH) ================= -->
+    <!-- ================= PS4 DASHBOARD HOME SCREEN ================= -->
+    <RelativeLayout
+        android:id="@+id/ps4_dashboard_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#051329"
+        android:visibility="gone">
 
-    <!-- Tombol B (Agak bawah di kiri A) -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_b"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_marginEnd="96dp"
-        android:layout_marginBottom="32dp"
-        android:insetLeft="0dp"
-        android:insetTop="0dp"
-        android:insetRight="0dp"
-        android:insetBottom="0dp"
-        android:padding="0dp"
-        android:text="B"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        app:backgroundTint="#80EF4444"
-        app:cornerRadius="32dp"
-        app:strokeColor="#FFEF4444"
-        app:strokeWidth="1.5dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <!-- Top Header Status Bar PS4 Style -->
+        <RelativeLayout
+            android:id="@+id/ps4_top_bar"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp">
 
-    <!-- Tombol A (Di kanan atas B) -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_a"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_marginEnd="24dp"
-        android:layout_marginBottom="72dp"
-        android:insetLeft="0dp"
-        android:insetTop="0dp"
-        android:insetRight="0dp"
-        android:insetBottom="0dp"
-        android:padding="0dp"
-        android:text="A"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        app:backgroundTint="#8022C55E"
-        app:cornerRadius="32dp"
-        app:strokeColor="#FF22C55E"
-        app:strokeWidth="1.5dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+            <TextView
+                android:id="@+id/tv_user_profile"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:text="🎮 PlayStation GBA System"
+                android:textColor="#E0E6ED"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-    <!-- ================= START & SELECT BUTTONS (TENGAH BAWAH) ================= -->
+            <TextView
+                android:id="@+id/tv_folder_info"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:text="Storage: /Documents/igba/"
+                android:textColor="#8A99AD"
+                android:textSize="12sp" />
+        </RelativeLayout>
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        android:orientation="horizontal"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        <!-- Dynamic Game Title & Info Panel -->
+        <LinearLayout
+            android:id="@+id/game_info_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/ps4_top_bar"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:paddingStart="40dp">
 
+            <TextView
+                android:id="@+id/tv_selected_game_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select A Game"
+                android:textColor="#FFFFFF"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_selected_game_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Press A/Tap to Play • Hold to change cover art"
+                android:textColor="#00A3FF"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Horizontal Game List RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_ps4_games"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_below="@id/game_info_panel"
+            android:layout_marginTop="20dp"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            android:paddingStart="32dp"
+            android:paddingEnd="32dp"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <!-- Floating Manual Add ROM Button -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_select"
-            android:layout_width="72dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="12dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:text="SELECT"
-            android:textColor="#D1D5DB"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            app:backgroundTint="#33FFFFFF"
-            app:cornerRadius="18dp"
-            app:strokeColor="#40FFFFFF"
+            android:id="@+id/btn_manual_pick_rom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="16dp"
+            android:text="➕ Load Outside ROM"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#1F2937"
+            app:cornerRadius="20dp"
+            app:strokeColor="#374151"
             app:strokeWidth="1dp" />
+    </RelativeLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_start"
-            android:layout_width="72dp"
-            android:layout_height="36dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:text="START"
-            android:textColor="#D1D5DB"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            app:backgroundTint="#33FFFFFF"
-            app:cornerRadius="18dp"
-            app:strokeColor="#40FFFFFF"
-            app:strokeWidth="1dp" />
+    <!-- ================= PS4 BOOT SPLASH SCREEN OVERLAY ================= -->
+    <RelativeLayout
+        android:id="@+id/ps4_splash_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="visible">
 
-    </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:gravity="center"
+            android:orientation="vertical">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+            <TextView
+                android:id="@+id/tv_ps4_logo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PS4"
+                android:textColor="#00439C"
+                android:textSize="72sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_ps4_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:letterSpacing="0.2"
+                android:text="PlayStation GBA Architecture"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </RelativeLayout>
+
+</FrameLayout>
