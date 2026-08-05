@@ -2,27 +2,24 @@
 #include <string>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 #include <android/bitmap.h>
 #include <android/log.h>
 
 #define LOG_TAG "IGameBoy-JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-// Sesuai dengan header Libretro
 #include "libretro.h"
 
 #ifndef RETRO_SIMULATED_FRAME
 #define RETRO_SIMULATED_FRAME ((const void*)(intptr_t)-1)
 #endif
 
-// Buffer frame dari callback libretro
 static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
 
-// Callback: Video refresh dari VBA Next
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data && data != RETRO_SIMULATED_FRAME) {
-        // Pitch VBA Next adalah 512 byte (256 uint16_t per baris)
         const uint16_t *src = (const uint16_t *)data;
         for (unsigned y = 0; y < height; y++) {
             memcpy(&frame_buffer[y * width], &src[y * (pitch / 2)], width * sizeof(uint16_t));
@@ -30,10 +27,8 @@ static void video_refresh_callback(const void *data, unsigned width, unsigned he
     }
 }
 
-// Callback: Input state polling dari VBA Next
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
     if (port == 0 && device == RETRO_DEVICE_JOYPAD) {
-        // Map bitmask dari Android ke Libretro Pad
         return (g_input_state & (1 << id)) ? 1 : 0;
     }
     return 0;
@@ -73,22 +68,58 @@ Java_com_rycl_igba_GbaEngine_nativeInit(JNIEnv *env, jobject thiz) {
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring rom_path) {
     const char *path = env->GetStringUTFChars(rom_path, nullptr);
-    
+
+    // 1. Buka file ROM dari path
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        LOGI("Gagal membuka file di path: %s", path);
+        env->ReleaseStringUTFChars(rom_path, path);
+        return JNI_FALSE;
+    }
+
+    // 2. Hitung ukuran file ROM
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    if (size <= 0) {
+        fclose(file);
+        env->ReleaseStringUTFChars(rom_path, path);
+        return JNI_FALSE;
+    }
+
+    // 3. Alokasikan memory buffer
+    void *buffer = malloc(size);
+    if (!buffer) {
+        fclose(file);
+        env->ReleaseStringUTFChars(rom_path, path);
+        return JNI_FALSE;
+    }
+
+    // 4. Baca isi ROM ke buffer
+    fread(buffer, 1, size, file);
+    fclose(file);
+
+    // 5. Isi struct Libretro secara lengkap
     struct retro_game_info game_info = {0};
     game_info.path = path;
-    
+    game_info.data = buffer;
+    game_info.size = size;
+
+    // 6. Load ROM ke core
     bool loaded = retro_load_game(&game_info);
-    
+
+    // 7. Cleanup
+    free(buffer);
     env->ReleaseStringUTFChars(rom_path, path);
+
     return loaded ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_rycl_igba_GbaEngine_nativeStepFrame(JNIEnv *env, jobject thiz, jobject bitmap) {
-    // Jalankan 1 frame emulator
     retro_run();
 
-    // Render buffer ke Android Bitmap (RGB_565)
     void *pixels;
     if (AndroidBitmap_lockPixels(env, bitmap, &pixels) >= 0) {
         memcpy(pixels, frame_buffer, 240 * 160 * sizeof(uint16_t));

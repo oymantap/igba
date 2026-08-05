@@ -8,7 +8,7 @@
     android:background="#000000"
     tools:context=".MainActivity">
 
-    <!-- Screen Custom View buat Emulator GBA -->
+    <!-- Screen Emulator GBA -->
     <com.rycl.igba.GbaView
         android:id="@+id/gba_view"
         android:layout_width="0dp"
@@ -18,5 +18,163 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Tombol Open File ROM (Pojok Kanan Atas agak ke tengah) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btn_open_rom"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="80dp"
+        android:contentDescription="Open ROM"
+        android:src="@drawable/ic_folder"
+        app:backgroundTint="#2196F3"
+        app:tint="#FFFFFF"
+        app:fabSize="mini"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- ================= SHOULDER BUTTONS (L / R) ================= -->
+
+    <!-- Tombol L (Pojok Kiri Atas) -->
+    <Button
+        android:id="@+id/btn_l"
+        android:layout_width="110dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:text="L"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:backgroundTint="#60FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Tombol R (Pojok Kanan Atas) -->
+    <Button
+        android:id="@+id/btn_r"
+        android:layout_width="110dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="16dp"
+        android:text="R"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:backgroundTint="#60FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- ================= CONTROLLER OVERLAY ================= -->
+
+    <!-- D-PAD AREA (Kiri Bawah) -->
+    <Button
+        android:id="@+id/btn_up"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:text="▲"
+        android:textSize="18sp"
+        android:backgroundTint="#40FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toTopOf="@id/btn_down"
+        app:layout_constraintStart_toStartOf="@id/btn_left"
+        app:layout_constraintEnd_toEndOf="@id/btn_right" />
+
+    <Button
+        android:id="@+id/btn_left"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginBottom="36dp"
+        android:text="◀"
+        android:textSize="18sp"
+        android:backgroundTint="#40FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/btn_right"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="60dp"
+        android:text="▶"
+        android:textSize="18sp"
+        android:backgroundTint="#40FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="@id/btn_left"
+        app:layout_constraintStart_toEndOf="@id/btn_left" />
+
+    <Button
+        android:id="@+id/btn_down"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:text="▼"
+        android:textSize="18sp"
+        android:backgroundTint="#40FFFFFF"
+        android:textColor="#FFFFFF"
+        app:layout_constraintTop_toBottomOf="@id/btn_left"
+        app:layout_constraintStart_toStartOf="@id/btn_left"
+        app:layout_constraintEnd_toEndOf="@id/btn_right" />
+
+    <!-- ACTION BUTTONS AREA (Kanan Bawah) -->
+    <Button
+        android:id="@+id/btn_b"
+        android:layout_width="65dp"
+        android:layout_height="65dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="24dp"
+        android:text="B"
+        android:textStyle="bold"
+        android:textSize="20sp"
+        android:backgroundTint="#40FF0000"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btn_a" />
+
+    <Button
+        android:id="@+id/btn_a"
+        android:layout_width="65dp"
+        android:layout_height="65dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="60dp"
+        android:text="A"
+        android:textStyle="bold"
+        android:textSize="20sp"
+        android:backgroundTint="#4000FF00"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- START & SELECT BUTTONS (Tengah Bawah) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btn_select"
+            android:layout_width="75dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="12dp"
+            android:text="SELECT"
+            android:textSize="10sp"
+            android:backgroundTint="#40FFFFFF"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="75dp"
+            android:layout_height="40dp"
+            android:text="START"
+            android:textSize="10sp"
+            android:backgroundTint="#40FFFFFF"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
