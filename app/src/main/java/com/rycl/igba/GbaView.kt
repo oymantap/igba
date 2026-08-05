@@ -39,14 +39,15 @@ class GbaView @JvmOverloads constructor(
     }
 
     private fun initAudio() {
-        val sampleRate = 32000 // GBA System Audio Output
+        val sampleRate = 32000 // GBA System Native Audio Output
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        val bufferSize = if (minBufferSize > 0) minBufferSize * 2 else 4096
+        // Penambahan Buffer Headroom 4x untuk mencegah underrun/stutter
+        val bufferSize = if (minBufferSize > 0) minBufferSize * 4 else 8192
 
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
@@ -123,7 +124,12 @@ class GbaView @JvmOverloads constructor(
                     val audioData = engine.nativeReadAudio()
                     if (audioData != null && audioData.isNotEmpty() && isRunning) {
                         try {
-                            audioTrack?.write(audioData, 0, audioData.size)
+                            audioTrack?.write(
+                                audioData, 
+                                0, 
+                                audioData.size, 
+                                AudioTrack.WRITE_NON_BLOCKING
+                            )
                         } catch (e: Exception) {
                             // Prevent crash during teardown
                         }

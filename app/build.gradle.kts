@@ -20,7 +20,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags("-std=c++17")
+                // OPTIMASI LEVEL 3 Bikin C++ Libretro kenceng pol!
+                cppFlags("-std=c++17 -O3 -ffast-math -funroll-loops")
             }
         }
     }

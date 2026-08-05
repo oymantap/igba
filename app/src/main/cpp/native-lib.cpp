@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 #include <mutex>
+#include <algorithm>
 #include <android/bitmap.h>
 #include <android/log.h>
 
@@ -17,9 +18,30 @@ static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
 static enum retro_pixel_format g_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 
-// Audio Ring Buffer
-static std::vector<int16_t> audio_buffer;
-static std::mutex audio_mutex;
+// Ring Buffer Audio untuk mencegah memory growth & stuttering
+#define AUDIO_RING_BUFFER_SIZE 8192
+static int16_t g_audio_ring[AUDIO_RING_BUFFER_SIZE];
+static size_t g_audio_head = 0;
+static size_t g_audio_tail = 0;
+static size_t g_audio_count = 0;
+static std::mutex g_audio_mutex;
+
+// Debug HUD Stats
+static unsigned long long g_frame_count = 0;
+
+static void push_audio_sample(int16_t left, int16_t right) {
+    std::lock_guard<std::mutex> lock(g_audio_mutex);
+    if (g_audio_count + 2 > AUDIO_RING_BUFFER_SIZE) {
+        // Buffer Penuh! Drop data tertua agar tidak kresek/lag
+        g_audio_head = (g_audio_head + 2) % AUDIO_RING_BUFFER_SIZE;
+        g_audio_count -= 2;
+    }
+    g_audio_ring[g_audio_tail] = left;
+    g_audio_tail = (g_audio_tail + 1) % AUDIO_RING_BUFFER_SIZE;
+    g_audio_ring[g_audio_tail] = right;
+    g_audio_tail = (g_audio_tail + 1) % AUDIO_RING_BUFFER_SIZE;
+    g_audio_count += 2;
+}
 
 // Convert 0RGB1555 (1-5-5-5) to RGB565 (5-6-5)
 static inline uint16_t convert_0rgb1555_to_rgb565(uint16_t color) {
@@ -71,14 +93,13 @@ static int16_t input_state_callback(unsigned port, unsigned device, unsigned ind
 static void input_poll_callback(void) {}
 
 static void audio_sample_callback(int16_t left, int16_t right) {
-    std::lock_guard<std::mutex> lock(audio_mutex);
-    audio_buffer.push_back(left);
-    audio_buffer.push_back(right);
+    push_audio_sample(left, right);
 }
 
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
-    std::lock_guard<std::mutex> lock(audio_mutex);
-    audio_buffer.insert(audio_buffer.end(), data, data + (frames * 2));
+    for (size_t i = 0; i < frames; i++) {
+        push_audio_sample(data[i * 2], data[i * 2 + 1]);
+    }
     return frames;
 }
 
@@ -157,6 +178,7 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
 extern "C" JNIEXPORT void JNICALL
 Java_com_rycl_igba_GbaEngine_nativeStepFrame(JNIEnv *env, jobject thiz, jobject bitmap) {
     retro_run();
+    g_frame_count++;
 
     if (bitmap) {
         void *pixels = nullptr;
@@ -176,14 +198,22 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(JNIEnv *env, jobject thiz, jint key
 
 extern "C" JNIEXPORT jshortArray JNICALL
 Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz) {
-    std::lock_guard<std::mutex> lock(audio_mutex);
-    if (audio_buffer.empty()) return nullptr;
+    std::lock_guard<std::mutex> lock(g_audio_mutex);
+    if (g_audio_count == 0) return nullptr;
 
-    jshortArray result = env->NewShortArray(audio_buffer.size());
+    jshortArray result = env->NewShortArray(static_cast<jsize>(g_audio_count));
     if (result) {
-        env->SetShortArrayRegion(result, 0, audio_buffer.size(), audio_buffer.data());
+        std::vector<int16_t> temp(g_audio_count);
+        for (size_t i = 0; i < g_audio_count; i++) {
+            temp[i] = g_audio_ring[(g_audio_head + i) % AUDIO_RING_BUFFER_SIZE];
+        }
+        env->SetShortArrayRegion(result, 0, static_cast<jsize>(g_audio_count), temp.data());
     }
-    audio_buffer.clear();
+
+    g_audio_head = 0;
+    g_audio_tail = 0;
+    g_audio_count = 0;
+
     return result;
 }
 
@@ -192,14 +222,16 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_rycl_igba_GbaEngine_nativeDebugInfo(JNIEnv *env, jobject thiz) {
     char buf[512];
     
-    std::lock_guard<std::mutex> lock(audio_mutex);
-    size_t current_audio_size = audio_buffer.size();
+    std::lock_guard<std::mutex> lock(g_audio_mutex);
+    size_t current_audio_size = g_audio_count;
 
     snprintf(buf, sizeof(buf),
         "=== IGBA DEBUG HUD ===\n"
+        "Total Frames : %llu\n"
         "Pixel Format : %d\n"
         "Audio Buffer : %zu samples\n"
         "Input Mask   : 0x%04X",
+        g_frame_count,
         g_pixel_format,
         current_audio_size,
         g_input_state
