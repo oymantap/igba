@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 class GbaEngine {
 
     init {
-        // Nama library disesuaikan persis dengan add_library(igameboy ...) di CMakeLists.txt
         System.loadLibrary("igameboy")
     }
 

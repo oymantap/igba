@@ -19,14 +19,14 @@
 static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
 
-// Callback Video: Menangani Stride/Pitch dengan benar
+// Callback Video
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data && data != RETRO_SIMULATED_FRAME) {
         const uint8_t *src = (const uint8_t *)data;
         uint8_t *dst = (uint8_t *)frame_buffer;
         
-        for (unsigned y = 0; y < height; y++) {
-            memcpy(dst + (y * width * 2), src + (y * pitch), width * 2);
+        for (unsigned y = 0; y < height && y < 160; y++) {
+            memcpy(dst + (y * 240 * 2), src + (y * pitch), width * 2 > 240 * 2 ? 240 * 2 : width * 2);
         }
     }
 }
@@ -80,7 +80,6 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
     const char *path = env->GetStringUTFChars(rom_path, nullptr);
     LOGI("Mencoba memuat ROM dari path: %s", path);
 
-    // 1. Buka file ROM
     FILE *file = fopen(path, "rb");
     if (!file) {
         LOGI("ERROR: File tidak ditemukan di path: %s", path);
@@ -88,7 +87,6 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
         return JNI_FALSE;
     }
 
-    // 2. Hitung ukuran file
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
     fseek(file, 0, SEEK_SET);
@@ -100,7 +98,6 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
         return JNI_FALSE;
     }
 
-    // 3. Alokasikan buffer memori untuk ROM
     void *buffer = malloc(size);
     if (!buffer) {
         fclose(file);
@@ -109,21 +106,17 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
         return JNI_FALSE;
     }
 
-    // 4. Baca file ke buffer
     fread(buffer, 1, size, file);
     fclose(file);
 
-    // 5. Isi struct retro_game_info lengkap dengan pointer buffer data
     struct retro_game_info game_info = {0};
     game_info.path = path;
     game_info.data = buffer;
     game_info.size = static_cast<size_t>(size);
 
-    // 6. Pass ke core libretro
     bool loaded = retro_load_game(&game_info);
     LOGI("Hasil retro_load_game: %d", loaded);
 
-    // 7. Cleanup buffer lokal
     free(buffer);
     env->ReleaseStringUTFChars(rom_path, path);
 
@@ -134,9 +127,13 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_rycl_igba_GbaEngine_nativeStepFrame(JNIEnv *env, jobject thiz, jobject bitmap) {
     retro_run();
 
-    void *pixels;
-    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) >= 0) {
-        memcpy(pixels, frame_buffer, 240 * 160 * sizeof(uint16_t));
+    if (!bitmap) return;
+
+    void *pixels = nullptr;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS) {
+        if (pixels) {
+            memcpy(pixels, frame_buffer, 240 * 160 * sizeof(uint16_t));
+        }
         AndroidBitmap_unlockPixels(env, bitmap);
     }
 }

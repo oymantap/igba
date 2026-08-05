@@ -69,7 +69,7 @@ class GbaView @JvmOverloads constructor(
             if (now - lastTime >= nsPerFrame) {
                 if (isRomLoaded) {
                     engine.nativeStepFrame(bitmap)
-                    postInvalidate()
+                    postInvalidateOnAnimation()
                 }
                 lastTime = now
             } else {
