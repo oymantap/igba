@@ -2,27 +2,40 @@ package com.rycl.igba
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Rect
 import android.util.AttributeSet
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.view.View
 
-class GbaView(context: Context, attrs: AttributeSet?) : SurfaceView(context, attrs), SurfaceHolder.Callback, Runnable {
+class GbaView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr), Runnable {
+
+    private val engine = GbaEngine()
+    private val bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
+    private val paint = Paint().apply {
+        isFilterBitmap = false // mempertahankan pixel-art tajam (no blur)
+    }
 
     private var isRunning = false
     private var isRomLoaded = false
     private var renderThread: Thread? = null
-    
-    private val bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
-    private val engine = GbaEngine()
+
+    private val srcRect = Rect(0, 0, 240, 160)
+    private val dstRect = Rect()
 
     init {
-        holder.addCallback(this)
         engine.nativeInit()
     }
 
     fun loadRom(path: String): Boolean {
         isRomLoaded = engine.nativeLoadRom(path)
+        if (isRomLoaded && !isRunning) {
+            startLoop()
+        }
         return isRomLoaded
     }
 
@@ -30,57 +43,48 @@ class GbaView(context: Context, attrs: AttributeSet?) : SurfaceView(context, att
         engine.nativeSendInput(keys)
     }
 
-    override fun surfaceCreated(holder: SurfaceHolder) {
+    private fun startLoop() {
         isRunning = true
-        renderThread = Thread(this)
-        renderThread?.start()
+        renderThread = Thread(this).apply { start() }
     }
 
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-
-    override fun surfaceDestroyed(holder: SurfaceHolder) {
+    fun stopLoop() {
         isRunning = false
-        var retry = true
-        while (retry) {
-            try {
-                renderThread?.join()
-                retry = false
-            } catch (e: InterruptedException) {
-                e.printStackTrace()
+        renderThread?.join()
+        renderThread = null
+    }
+
+    override fun run() {
+        var lastTime = System.nanoTime()
+        val nsPerFrame = 1_000_000_000.0 / 60.0 // Target ~60 FPS
+
+        while (isRunning) {
+            val now = System.nanoTime()
+            if (now - lastTime >= nsPerFrame) {
+                if (isRomLoaded) {
+                    engine.nativeStepFrame(bitmap)
+                    postInvalidate()
+                }
+                lastTime = now
+            } else {
+                try {
+                    Thread.sleep(1)
+                } catch (e: InterruptedException) {
+                    break
+                }
             }
         }
     }
 
-    override fun run() {
-        val targetFps = 60
-        val targetFrameTime = 1000 / targetFps // ~16ms per frame
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h)
+        dstRect.set(0, 0, w, h)
+    }
 
-        while (isRunning) {
-            val startTime = System.currentTimeMillis()
-
-            // Hanya step frame jika ROM sudah berhasil di-load
-            if (isRomLoaded && holder.surface.isValid) {
-                engine.nativeStepFrame(bitmap)
-
-                val canvas = holder.lockCanvas()
-                if (canvas != null) {
-                    // Scale gambar GBA (240x160) memenuhi layar SurfaceView
-                    val destRect = Rect(0, 0, canvas.width, canvas.height)
-                    canvas.drawBitmap(bitmap, null, destRect, null)
-                    holder.unlockCanvasAndPost(canvas)
-                }
-            }
-
-            // Cap Frame Rate ke 60 FPS
-            val timeTaken = System.currentTimeMillis() - startTime
-            val sleepTime = targetFrameTime - timeTaken
-            if (sleepTime > 0) {
-                try {
-                    Thread.sleep(sleepTime)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (isRomLoaded) {
+            canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
         }
     }
 }

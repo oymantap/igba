@@ -15,18 +15,23 @@
 #define RETRO_SIMULATED_FRAME ((const void*)(intptr_t)-1)
 #endif
 
+// Framebuffer 240x160 RGB565 (2 bytes per pixel)
 static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
 
+// Callback Video: Menangani Pitch dengan benar agar tidak glitch/stride miring
 static void video_refresh_callback(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data && data != RETRO_SIMULATED_FRAME) {
-        const uint16_t *src = (const uint16_t *)data;
+        const uint8_t *src = (const uint8_t *)data;
+        uint8_t *dst = (uint8_t *)frame_buffer;
+        
         for (unsigned y = 0; y < height; y++) {
-            memcpy(&frame_buffer[y * width], &src[y * (pitch / 2)], width * sizeof(uint16_t));
+            memcpy(dst + (y * width * 2), src + (y * pitch), width * 2);
         }
     }
 }
 
+// Callback Input Bitmask Libretro Standard
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
     if (port == 0 && device == RETRO_DEVICE_JOYPAD) {
         return (g_input_state & (1 << id)) ? 1 : 0;
@@ -67,52 +72,46 @@ Java_com_rycl_igba_GbaEngine_nativeInit(JNIEnv *env, jobject thiz) {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring rom_path) {
-    const char *path = env->GetStringUTFChars(rom_path, nullptr);
+    if (rom_path == nullptr) {
+        LOGI("Error: rom_path is null");
+        return JNI_FALSE;
+    }
 
-    // 1. Buka file ROM dari path
+    const char *path = env->GetStringUTFChars(rom_path, nullptr);
+    LOGI("Mencoba memuat ROM dari path: %s", path);
+
+    // 1. Cek keberadaan file di cache internal Android
     FILE *file = fopen(path, "rb");
     if (!file) {
-        LOGI("Gagal membuka file di path: %s", path);
+        LOGI("ERROR: File tidak ditemukan di path: %s", path);
         env->ReleaseStringUTFChars(rom_path, path);
         return JNI_FALSE;
     }
 
-    // 2. Hitung ukuran file ROM
+    // 2. Cek ukuran file
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    if (size <= 0) {
-        fclose(file);
-        env->ReleaseStringUTFChars(rom_path, path);
-        return JNI_FALSE;
-    }
-
-    // 3. Alokasikan memory buffer
-    void *buffer = malloc(size);
-    if (!buffer) {
-        fclose(file);
-        env->ReleaseStringUTFChars(rom_path, path);
-        return JNI_FALSE;
-    }
-
-    // 4. Baca isi ROM ke buffer
-    fread(buffer, 1, size, file);
     fclose(file);
 
-    // 5. Isi struct Libretro secara lengkap
+    LOGI("Ukuran file ROM: %ld bytes", size);
+
+    if (size <= 0) {
+        LOGI("ERROR: File ROM kosong!");
+        env->ReleaseStringUTFChars(rom_path, path);
+        return JNI_FALSE;
+    }
+
+    // 3. Pasang ke struct retro_game_info (pakai path karena core dipasang CPULoadRom)
     struct retro_game_info game_info = {0};
     game_info.path = path;
-    game_info.data = buffer;
-    game_info.size = size;
+    game_info.data = nullptr;
+    game_info.size = static_cast<size_t>(size);
 
-    // 6. Load ROM ke core
+    // 4. Load ke core libretro
     bool loaded = retro_load_game(&game_info);
+    LOGI("Hasil retro_load_game: %d", loaded);
 
-    // 7. Cleanup
-    free(buffer);
     env->ReleaseStringUTFChars(rom_path, path);
-
     return loaded ? JNI_TRUE : JNI_FALSE;
 }
 
