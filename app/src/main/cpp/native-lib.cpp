@@ -11,6 +11,10 @@
 // Sesuai dengan header Libretro
 #include "libretro.h"
 
+#ifndef RETRO_SIMULATED_FRAME
+#define RETRO_SIMULATED_FRAME ((const void*)(intptr_t)-1)
+#endif
+
 // Buffer frame dari callback libretro
 static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
