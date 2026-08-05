@@ -44,6 +44,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSelectedGameSub: TextView
     private lateinit var btnBackIgba: MaterialButton
     private lateinit var btnManualPickRom: MaterialButton
+    
+    // DEBUG HUD COMPONENTS
+    private lateinit var tvDebugHud: TextView
+    private val debugHandler = Handler(Looper.getMainLooper())
+    private var isDebugVisible = false
+
+    // Secret Cheat Sequence: UP, DOWN, UP, DOWN, A, B, L, R
+    private val secretCheatCode = listOf(
+        DEVICE_ID_JOYPAD_UP,
+        DEVICE_ID_JOYPAD_DOWN,
+        DEVICE_ID_JOYPAD_UP,
+        DEVICE_ID_JOYPAD_DOWN,
+        DEVICE_ID_JOYPAD_A,
+        DEVICE_ID_JOYPAD_B,
+        DEVICE_ID_JOYPAD_L,
+        DEVICE_ID_JOYPAD_R
+    )
+    private val keyHistory = ArrayDeque<Int>()
 
     private val gamesList = mutableListOf<GameModel>()
     private lateinit var ps4Adapter: Ps4GameAdapter
@@ -125,6 +143,9 @@ class MainActivity : AppCompatActivity() {
         tvSelectedGameSub = findViewById(R.id.tv_selected_game_sub)
         btnBackIgba = findViewById(R.id.btn_back_igba)
         btnManualPickRom = findViewById(R.id.btn_manual_pick_rom)
+        
+        // Init Debug Overlay View
+        tvDebugHud = findViewById(R.id.tv_debug_hud)
 
         btnManualPickRom.setOnClickListener { openFilePicker() }
         btnBackIgba.setOnClickListener { showIgbaDashboard() }
@@ -188,6 +209,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showIgbaDashboard() {
+        stopDebugLoop()
         gbaView.stopLoop()
         emulatorLayout.visibility = View.GONE
         igbaDashboardLayout.visibility = View.VISIBLE
@@ -420,6 +442,11 @@ class MainActivity : AppCompatActivity() {
             if (btn.isPressed != shouldBePressed) {
                 btn.isPressed = shouldBePressed
                 updateButtonVisuals(btn.view, shouldBePressed)
+                
+                // Cek secret code jika tombol baru saja ditekan
+                if (shouldBePressed) {
+                    checkSecretCheat(btn.bitmask)
+                }
             }
             if (btn.isPressed) {
                 newKeys = newKeys or (1 shl btn.bitmask)
@@ -432,6 +459,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkSecretCheat(bitmask: Int) {
+        keyHistory.addLast(bitmask)
+
+        while (keyHistory.size > secretCheatCode.size) {
+            keyHistory.removeFirst()
+        }
+
+        if (keyHistory.toList() == secretCheatCode) {
+            toggleDebugHUD()
+            keyHistory.clear()
+        }
+    }
+
+    private fun toggleDebugHUD() {
+        isDebugVisible = !isDebugVisible
+        if (isDebugVisible) {
+            tvDebugHud.visibility = View.VISIBLE
+            Toast.makeText(this, "⚙️ Debug HUD Activated!", Toast.LENGTH_SHORT).show()
+            startDebugLoop()
+        } else {
+            tvDebugHud.visibility = View.GONE
+            stopDebugLoop()
+            Toast.makeText(this, "⚙️ Debug HUD Hidden", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val debugRunnable = object : Runnable {
+        override fun run() {
+            if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
+                try {
+                    // Panggil fungsi JNI Native
+                    val info = GbaEngine.nativeDebugInfo()
+                    tvDebugHud.text = info
+                } catch (e: Exception) {
+                    tvDebugHud.text = "Debug Error: ${e.message}"
+                }
+                debugHandler.postDelayed(this, 200) // Update tiap 200ms
+            }
+        }
+    }
+
+    private fun startDebugLoop() {
+        debugHandler.removeCallbacks(debugRunnable)
+        debugHandler.post(debugRunnable)
+    }
+
+    private fun stopDebugLoop() {
+        debugHandler.removeCallbacks(debugRunnable)
+    }
+
     private fun updateButtonVisuals(view: View, isPressed: Boolean) {
         if (isPressed) {
             view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(50).start()
@@ -441,6 +518,11 @@ class MainActivity : AppCompatActivity() {
             view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(50).start()
             view.alpha = 1.0f
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopDebugLoop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

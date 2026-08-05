@@ -174,6 +174,8 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(JNIEnv *env, jobject thiz, jint key
     g_input_state = (uint16_t)keys;
 }
 
+// ... Kode lama native-lib.cpp lu tetap di atas ...
+
 extern "C" JNIEXPORT jshortArray JNICALL
 Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz) {
     std::lock_guard<std::mutex> lock(audio_mutex);
@@ -183,6 +185,30 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz) {
     if (result) {
         env->SetShortArrayRegion(result, 0, audio_buffer.size(), audio_buffer.data());
     }
+    audio_buffer.clear();
+    return result;
+}
+
+// ================= FITUR DEBUG HUD OVERLAY =================
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_rycl_igba_GbaEngine_nativeDebugInfo(JNIEnv *env, jobject thiz) {
+    char buf[512];
+    
+    std::lock_guard<std::mutex> lock(audio_mutex);
+    size_t current_audio_size = audio_buffer.size();
+
+    snprintf(buf, sizeof(buf),
+        "=== IGBA DEBUG HUD ===\n"
+        "Pixel Format : %d\n"
+        "Audio Buffer : %zu samples\n"
+        "Input Mask   : 0x%04X",
+        g_pixel_format,
+        current_audio_size,
+        g_input_state
+    );
+
+    return env->NewStringUTF(buf);
+}
     audio_buffer.clear();
     return result;
 }
