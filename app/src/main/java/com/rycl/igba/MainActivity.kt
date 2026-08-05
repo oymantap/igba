@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
         registerButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
         registerButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
 
-        val rootLayout = findViewById<View>(android.R.content.PM_CONFIG_FONT_SCALE).rootView
+        val rootLayout = findViewById<View>(android.R.id.content).rootView
         rootLayout.setOnTouchListener { _, event ->
             handleGlobalTouch(event)
             true
@@ -101,8 +101,8 @@ class MainActivity : AppCompatActivity() {
         val tempRect = Rect()
 
         for (pointerIndex in 0 until event.pointerCount) {
-            if (event.getActionMasked() == MotionEvent.ACTION_UP ||
-                event.getActionMasked() == MotionEvent.ACTION_POINTER_UP
+            if (event.actionMasked == MotionEvent.ACTION_UP ||
+                event.actionMasked == MotionEvent.ACTION_POINTER_UP
             ) {
                 if (pointerIndex == event.actionIndex) continue
             }
