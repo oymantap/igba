@@ -17,9 +17,10 @@ class GbaView @JvmOverloads constructor(
     private val engine = GbaEngine()
     private val bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
     private val paint = Paint().apply {
-        isFilterBitmap = false // Preserves crisp pixel-art rendering
+        isFilterBitmap = false // Supaya visual pixel art tetep tajam
     }
 
+    @Volatile
     private var isRunning = false
     private var isRomLoaded = false
     private var renderThread: Thread? = null
@@ -43,20 +44,25 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSendInput(keys)
     }
 
-    private fun startLoop() {
+    private synchronized fun startLoop() {
+        if (isRunning) return
         isRunning = true
-        renderThread = Thread(this).apply { start() }
+        renderThread = Thread(this, "GbaRenderThread").apply { start() }
     }
 
     fun stopLoop() {
         isRunning = false
-        renderThread?.join()
+        try {
+            renderThread?.join(500)
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
+        }
         renderThread = null
     }
 
     override fun run() {
         var lastTime = System.nanoTime()
-        val nsPerFrame = 1_000_000_000.0 / 60.0 // 60 FPS target loop
+        val nsPerFrame = 1_000_000_000.0 / 60.0 // Target 60 FPS
 
         while (isRunning) {
             val now = System.nanoTime()
@@ -76,8 +82,9 @@ class GbaView @JvmOverloads constructor(
         }
     }
 
+    // METHOD INI YANG DIBERESIN: Lengkap 4 parameter (w, h, oldw, oldh)
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h)
+        super.onSizeChanged(w, h, oldw, oldh)
         dstRect.set(0, 0, w, h)
     }
 
@@ -86,5 +93,10 @@ class GbaView @JvmOverloads constructor(
         if (isRomLoaded) {
             canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
         }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        stopLoop()
     }
 }
