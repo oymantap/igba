@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.util.AttributeSet
 import android.view.View
 
@@ -28,8 +31,38 @@ class GbaView @JvmOverloads constructor(
     private val srcRect = Rect(0, 0, 240, 160)
     private val dstRect = Rect()
 
+    private var audioTrack: AudioTrack? = null
+
     init {
         engine.nativeInit()
+        initAudio()
+    }
+
+    private fun initAudio() {
+        val sampleRate = 32000 // GBA System Audio Output
+        val minBufferSize = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_STEREO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+
+        audioTrack = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                    .build()
+            )
+            .setBufferSizeInBytes(minBufferSize * 2)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
     }
 
     fun loadRom(path: String): Boolean {
@@ -44,16 +77,16 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSendInput(keys)
     }
 
-private fun startLoop() {
-    synchronized(this) {
+    private synchronized fun startLoop() {
         if (isRunning) return
         isRunning = true
+        audioTrack?.play()
         renderThread = Thread(this, "GbaRenderThread").apply { start() }
     }
-}
 
     fun stopLoop() {
         isRunning = false
+        audioTrack?.stop()
         try {
             renderThread?.join(500)
         } catch (e: InterruptedException) {
@@ -72,6 +105,11 @@ private fun startLoop() {
                 if (isRomLoaded) {
                     engine.nativeStepFrame(bitmap)
                     postInvalidateOnAnimation()
+
+                    val audioData = engine.nativeReadAudio()
+                    if (audioData != null && audioData.isNotEmpty()) {
+                        audioTrack?.write(audioData, 0, audioData.size)
+                    }
                 }
                 lastTime = now
             } else {
@@ -99,5 +137,6 @@ private fun startLoop() {
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         stopLoop()
+        audioTrack?.release()
     }
 }

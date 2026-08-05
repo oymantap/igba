@@ -12,4 +12,5 @@ class GbaEngine {
     external fun nativeLoadRom(romPath: String): Boolean
     external fun nativeStepFrame(bitmap: Bitmap)
     external fun nativeSendInput(keys: Int)
+    external fun nativeReadAudio(): ShortArray?
 }

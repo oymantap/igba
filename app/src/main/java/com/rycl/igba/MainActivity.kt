@@ -3,14 +3,15 @@ package com.rycl.igba
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
-import android.widget.Button
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -22,9 +23,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var gbaView: GbaView
     private lateinit var btnOpenRom: FloatingActionButton
+
     private var currentKeys = 0
 
-    // Standard Bitmask Libretro Joypad Constants (Disesuaikan dengan libretro.h)
+    private data class ControllerButton(
+        val view: View,
+        val bitmask: Int,
+        var isPressed: Boolean = false
+    )
+
+    private val registeredButtons = ArrayList<ControllerButton>()
+
     companion object {
         const val DEVICE_ID_JOYPAD_B = 0
         const val DEVICE_ID_JOYPAD_Y = 1
@@ -40,11 +49,11 @@ class MainActivity : AppCompatActivity() {
         const val DEVICE_ID_JOYPAD_R = 11
     }
 
-    private val openRomLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private val openRomLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { uri ->
-                loadRomFromUri(uri)
-            }
+            result.data?.data?.let { uri -> loadRomFromUri(uri) }
         }
     }
 
@@ -57,49 +66,90 @@ class MainActivity : AppCompatActivity() {
         gbaView = findViewById(R.id.gba_view)
         btnOpenRom = findViewById(R.id.btn_open_rom)
 
-        btnOpenRom.setOnClickListener {
-            openFilePicker()
-        }
+        btnOpenRom.setOnClickListener { openFilePicker() }
 
-        setupControllerButtons()
+        setupController()
+    }
+
+    private fun registerButton(viewId: Int, bitmask: Int) {
+        val btnView = findViewById<View>(viewId) ?: return
+        registeredButtons.add(ControllerButton(btnView, bitmask))
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun bindButton(buttonId: Int, bitmaskId: Int) {
-        val btn = findViewById<Button>(buttonId)
-        btn?.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    handleButtonTouch(bitmaskId, true)
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    handleButtonTouch(bitmaskId, false)
-                    true
-                }
-                else -> false
-            }
+    private fun setupController() {
+        registerButton(R.id.btn_up, DEVICE_ID_JOYPAD_UP)
+        registerButton(R.id.btn_down, DEVICE_ID_JOYPAD_DOWN)
+        registerButton(R.id.btn_left, DEVICE_ID_JOYPAD_LEFT)
+        registerButton(R.id.btn_right, DEVICE_ID_JOYPAD_RIGHT)
+        registerButton(R.id.btn_a, DEVICE_ID_JOYPAD_A)
+        registerButton(R.id.btn_b, DEVICE_ID_JOYPAD_B)
+        registerButton(R.id.btn_l, DEVICE_ID_JOYPAD_L)
+        registerButton(R.id.btn_r, DEVICE_ID_JOYPAD_R)
+        registerButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
+        registerButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
+
+        val rootLayout = findViewById<View>(android.R.content.PM_CONFIG_FONT_SCALE).rootView
+        rootLayout.setOnTouchListener { _, event ->
+            handleGlobalTouch(event)
+            true
         }
     }
 
-    private fun setupControllerButtons() {
-        bindButton(R.id.btn_up, DEVICE_ID_JOYPAD_UP)
-        bindButton(R.id.btn_down, DEVICE_ID_JOYPAD_DOWN)
-        bindButton(R.id.btn_left, DEVICE_ID_JOYPAD_LEFT)
-        bindButton(R.id.btn_right, DEVICE_ID_JOYPAD_RIGHT)
-        bindButton(R.id.btn_a, DEVICE_ID_JOYPAD_A)
-        bindButton(R.id.btn_b, DEVICE_ID_JOYPAD_B)
-        bindButton(R.id.btn_l, DEVICE_ID_JOYPAD_L)
-        bindButton(R.id.btn_r, DEVICE_ID_JOYPAD_R)
-        bindButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
-        bindButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
+    private fun handleGlobalTouch(event: MotionEvent) {
+        val activeMasks = HashSet<Int>()
+        val tempRect = Rect()
+
+        for (pointerIndex in 0 until event.pointerCount) {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP ||
+                event.getActionMasked() == MotionEvent.ACTION_POINTER_UP
+            ) {
+                if (pointerIndex == event.actionIndex) continue
+            }
+
+            val x = event.getX(pointerIndex).toInt()
+            val y = event.getY(pointerIndex).toInt()
+
+            for (btn in registeredButtons) {
+                btn.view.getGlobalVisibleRect(tempRect)
+                if (tempRect.contains(x, y)) {
+                    activeMasks.add(btn.bitmask)
+                }
+            }
+        }
+
+        var newKeys = 0
+        for (btn in registeredButtons) {
+            val shouldBePressed = activeMasks.contains(btn.bitmask)
+            if (btn.isPressed != shouldBePressed) {
+                btn.isPressed = shouldBePressed
+                updateButtonVisuals(btn.view, shouldBePressed)
+            }
+            if (btn.isPressed) {
+                newKeys = newKeys or (1 shl btn.bitmask)
+            }
+        }
+
+        if (currentKeys != newKeys) {
+            currentKeys = newKeys
+            gbaView.updateInput(currentKeys)
+        }
+    }
+
+    private fun updateButtonVisuals(view: View, isPressed: Boolean) {
+        if (isPressed) {
+            view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(50).start()
+            view.alpha = 0.5f
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        } else {
+            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(50).start()
+            view.alpha = 1.0f
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
-        }
+        if (hasFocus) hideSystemUI()
     }
 
     private fun hideSystemUI() {
@@ -145,7 +195,7 @@ class MainActivity : AppCompatActivity() {
             val isLoaded = gbaView.loadRom(absolutePath)
 
             if (isLoaded) {
-                Toast.makeText(this, "ROM Berhasil Dimuat!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "ROM Dimuat!", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Gagal memuat ROM GBA", Toast.LENGTH_LONG).show()
             }
@@ -153,15 +203,5 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    fun handleButtonTouch(bitmaskId: Int, isPressed: Boolean) {
-        val mask = 1 shl bitmaskId
-        if (isPressed) {
-            currentKeys = currentKeys or mask
-        } else {
-            currentKeys = currentKeys and mask.inv()
-        }
-        gbaView.updateInput(currentKeys)
     }
 }
