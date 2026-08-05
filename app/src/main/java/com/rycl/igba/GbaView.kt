@@ -44,11 +44,13 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSendInput(keys)
     }
 
-    private synchronized fun startLoop() {
+private fun startLoop() {
+    synchronized(this) {
         if (isRunning) return
         isRunning = true
         renderThread = Thread(this, "GbaRenderThread").apply { start() }
     }
+}
 
     fun stopLoop() {
         isRunning = false
