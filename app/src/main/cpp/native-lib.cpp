@@ -174,8 +174,6 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(JNIEnv *env, jobject thiz, jint key
     g_input_state = (uint16_t)keys;
 }
 
-// ... Kode lama native-lib.cpp lu tetap di atas ...
-
 extern "C" JNIEXPORT jshortArray JNICALL
 Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz) {
     std::lock_guard<std::mutex> lock(audio_mutex);
@@ -208,7 +206,4 @@ Java_com_rycl_igba_GbaEngine_nativeDebugInfo(JNIEnv *env, jobject thiz) {
     );
 
     return env->NewStringUTF(buf);
-}
-    audio_buffer.clear();
-    return result;
 }
