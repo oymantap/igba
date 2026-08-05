@@ -1,6 +1,5 @@
 package com.rycl.igba
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Rect
@@ -32,7 +31,7 @@ class MainActivity : AppCompatActivity() {
         var isPressed: Boolean = false
     )
 
-    private val registeredButtons = ArrayList<ControllerButton>()
+    private val registeredButtons = mutableListOf<ControllerButton>()
 
     companion object {
         const val DEVICE_ID_JOYPAD_B = 0
@@ -76,7 +75,6 @@ class MainActivity : AppCompatActivity() {
         registeredButtons.add(ControllerButton(btnView, bitmask))
     }
 
-    @SuppressLint("ClickableViewAccessibility")
     private fun setupController() {
         registerButton(R.id.btn_up, DEVICE_ID_JOYPAD_UP)
         registerButton(R.id.btn_down, DEVICE_ID_JOYPAD_DOWN)
@@ -88,24 +86,23 @@ class MainActivity : AppCompatActivity() {
         registerButton(R.id.btn_r, DEVICE_ID_JOYPAD_R)
         registerButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
         registerButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
+    }
 
-        val rootLayout = findViewById<View>(android.R.id.content).rootView
-        rootLayout.setOnTouchListener { _, event ->
-            handleGlobalTouch(event)
-            true
-        }
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        ev?.let { handleGlobalTouch(it) }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun handleGlobalTouch(event: MotionEvent) {
-        val activeMasks = HashSet<Int>()
+        val activeMasks = mutableSetOf<Int>()
         val tempRect = Rect()
 
         for (pointerIndex in 0 until event.pointerCount) {
-            if (event.actionMasked == MotionEvent.ACTION_UP ||
-                event.actionMasked == MotionEvent.ACTION_POINTER_UP
-            ) {
+            val action = event.actionMasked
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
                 if (pointerIndex == event.actionIndex) continue
             }
+            if (action == MotionEvent.ACTION_CANCEL) continue
 
             val x = event.getX(pointerIndex).toInt()
             val y = event.getY(pointerIndex).toInt()

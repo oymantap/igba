@@ -18,8 +18,8 @@ class GbaView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr), Runnable {
 
     private val engine = GbaEngine()
-    private val bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
-    private val paint = Paint().apply {
+    private val bitmap: Bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
+    private val paint: Paint = Paint().apply {
         isFilterBitmap = false
     }
 
@@ -46,6 +46,8 @@ class GbaView @JvmOverloads constructor(
             AudioFormat.ENCODING_PCM_16BIT
         )
 
+        val bufferSize = if (minBufferSize > 0) minBufferSize * 2 else 4096
+
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -60,7 +62,7 @@ class GbaView @JvmOverloads constructor(
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build()
             )
-            .setBufferSizeInBytes(minBufferSize * 2)
+            .setBufferSizeInBytes(bufferSize)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
     }
@@ -80,13 +82,24 @@ class GbaView @JvmOverloads constructor(
     private synchronized fun startLoop() {
         if (isRunning) return
         isRunning = true
-        audioTrack?.play()
+        try {
+            audioTrack?.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         renderThread = Thread(this, "GbaRenderThread").apply { start() }
     }
 
     fun stopLoop() {
         isRunning = false
-        audioTrack?.stop()
+        try {
+            if (audioTrack?.state == AudioTrack.STATE_INITIALIZED &&
+                audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                audioTrack?.stop()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         try {
             renderThread?.join(500)
         } catch (e: InterruptedException) {
@@ -107,8 +120,12 @@ class GbaView @JvmOverloads constructor(
                     postInvalidateOnAnimation()
 
                     val audioData = engine.nativeReadAudio()
-                    if (audioData != null && audioData.isNotEmpty()) {
-                        audioTrack?.write(audioData, 0, audioData.size)
+                    if (audioData != null && audioData.isNotEmpty() && isRunning) {
+                        try {
+                            audioTrack?.write(audioData, 0, audioData.size)
+                        } catch (e: Exception) {
+                            // Prevent crash during teardown
+                        }
                     }
                 }
                 lastTime = now
@@ -137,6 +154,11 @@ class GbaView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         stopLoop()
-        audioTrack?.release()
+        try {
+            audioTrack?.release()
+            audioTrack = null
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
