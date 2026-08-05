@@ -8,6 +8,7 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.rycl.igba.R // <-- FIXED: Import R ditambahkan di sini
 import java.io.File
 import java.io.FileOutputStream
 
@@ -31,8 +32,7 @@ class MainActivity : AppCompatActivity() {
 
         gbaView = findViewById(R.id.gba_view)
 
-        // Contoh: Otomatis buka File Picker saat aplikasi dibuka
-        // Atau lo bisa pasang listener ini di tombol "Load ROM"
+        // Otomatis buka File Picker saat aplikasi dibuka
         openFilePicker()
     }
 
