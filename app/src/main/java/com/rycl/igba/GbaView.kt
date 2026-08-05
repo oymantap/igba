@@ -79,7 +79,8 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSendInput(keys)
     }
 
-    private synchronized fun startLoop() {
+    @Synchronized
+    private fun startLoop() {
         if (isRunning) return
         isRunning = true
         try {
