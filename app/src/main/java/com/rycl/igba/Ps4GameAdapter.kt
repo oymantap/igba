@@ -21,6 +21,8 @@ class Ps4GameAdapter(
     private val onItemFocused: (GameModel) -> Unit
 ) : RecyclerView.Adapter<Ps4GameAdapter.GameViewHolder>() {
 
+    private var selectedPosition = 0
+
     class GameViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val imgCover: ImageView = itemView.findViewById(R.id.img_game_cover)
         val tvTitle: TextView = itemView.findViewById(R.id.tv_game_item_title)
@@ -33,6 +35,8 @@ class Ps4GameAdapter(
 
     override fun onBindViewHolder(holder: GameViewHolder, position: Int) {
         val game = games[position]
+        val isSelected = position == selectedPosition
+
         holder.tvTitle.text = game.title
 
         if (game.coverBitmap != null) {
@@ -42,17 +46,39 @@ class Ps4GameAdapter(
             holder.imgCover.setImageBitmap(generatedCover)
         }
 
-        holder.itemView.setOnClickListener { onItemClick(game) }
+        // Efek Mengembang Mengkerut (Animation Scaling ala PS4 Selected Item)
+        if (isSelected) {
+            holder.itemView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(180).start()
+            holder.itemView.elevation = 16f
+        } else {
+            holder.itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(180).start()
+            holder.itemView.elevation = 4f
+        }
+
+        holder.itemView.setOnClickListener {
+            if (selectedPosition != holder.adapterPosition) {
+                val oldPos = selectedPosition
+                selectedPosition = holder.adapterPosition
+                notifyItemChanged(oldPos)
+                notifyItemChanged(selectedPosition)
+                onItemFocused(game)
+            } else {
+                onItemClick(game)
+            }
+        }
+
         holder.itemView.setOnLongClickListener {
             onItemLongClick(game)
             true
         }
+
         holder.itemView.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                holder.itemView.animate().scaleX(1.1f).scaleY(1.1f).setDuration(150).start()
+                val oldPos = selectedPosition
+                selectedPosition = holder.adapterPosition
+                notifyItemChanged(oldPos)
+                notifyItemChanged(selectedPosition)
                 onItemFocused(game)
-            } else {
-                holder.itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
             }
         }
     }

@@ -20,7 +20,6 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.animation.AlphaAnimation
-import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -29,7 +28,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -38,12 +36,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var gbaView: GbaView
     private lateinit var emulatorLayout: View
-    private lateinit var ps4DashboardLayout: RelativeLayout
-    private lateinit var ps4SplashOverlay: RelativeLayout
-    private lateinit var rvPs4Games: RecyclerView
+    private lateinit var igbaDashboardLayout: RelativeLayout
+    private lateinit var igbaSplashOverlay: RelativeLayout
+    private lateinit var rvIgbaGames: RecyclerView
+    private lateinit var tvUserProfile: TextView
     private lateinit var tvSelectedGameTitle: TextView
     private lateinit var tvSelectedGameSub: TextView
-    private lateinit var btnBackPs4: MaterialButton
+    private lateinit var btnBackIgba: MaterialButton
     private lateinit var btnManualPickRom: MaterialButton
 
     private val gamesList = mutableListOf<GameModel>()
@@ -75,14 +74,10 @@ class MainActivity : AppCompatActivity() {
         const val DEVICE_ID_JOYPAD_R = 11
     }
 
-    // Permission Launcher for External Storage (Android 11+)
     private val storageManagerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) {
-        checkAndCreateFolders()
-    }
+    ) { checkAndCreateFolders() }
 
-    // Permission Launcher for Legacy Storage (Android 10 and lower)
     private val legacyStorageLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -93,7 +88,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Picker Launcher for Manual ROM
     private val openRomLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -102,7 +96,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Picker Launcher for Custom Cover Art
     private val pickCoverLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -118,38 +111,36 @@ class MainActivity : AppCompatActivity() {
         hideSystemUI()
         initViews()
         setupController()
-
-        // 1. Request Permission & Setup Folder Directory First
         requestStoragePermissions()
     }
 
     private fun initViews() {
         gbaView = findViewById(R.id.gba_view)
         emulatorLayout = findViewById(R.id.emulator_layout)
-        ps4DashboardLayout = findViewById(R.id.ps4_dashboard_layout)
-        ps4SplashOverlay = findViewById(R.id.ps4_splash_overlay)
-        rvPs4Games = findViewById(R.id.rv_ps4_games)
+        igbaDashboardLayout = findViewById(R.id.igba_dashboard_layout)
+        igbaSplashOverlay = findViewById(R.id.igba_splash_overlay)
+        rvIgbaGames = findViewById(R.id.rv_igba_games)
+        tvUserProfile = findViewById(R.id.tv_user_profile)
         tvSelectedGameTitle = findViewById(R.id.tv_selected_game_title)
         tvSelectedGameSub = findViewById(R.id.tv_selected_game_sub)
-        btnBackPs4 = findViewById(R.id.btn_back_ps4)
+        btnBackIgba = findViewById(R.id.btn_back_igba)
         btnManualPickRom = findViewById(R.id.btn_manual_pick_rom)
 
         btnManualPickRom.setOnClickListener { openFilePicker() }
-        btnBackPs4.setOnClickListener { showPs4Dashboard() }
+        btnBackIgba.setOnClickListener { showIgbaDashboard() }
 
         ps4Adapter = Ps4GameAdapter(
             games = gamesList,
             onItemClick = { game -> launchGame(game) },
             onItemLongClick = { game -> promptChangeCover(game) },
             onItemFocused = { game ->
+                tvUserProfile.text = "🎮 ${game.title}"
                 tvSelectedGameTitle.text = game.title
-                tvSelectedGameSub.text = "File: ${game.file.name}"
+                tvSelectedGameSub.text = if (game.isAsset) "Built-in IGBA HEN Game" else "File: ${game.file?.name}"
             }
         )
-        rvPs4Games.adapter = ps4Adapter
+        rvIgbaGames.adapter = ps4Adapter
     }
-
-    // ================= 1 & 2. PERMISSIONS & FOLDER IGBA =================
 
     private fun requestStoragePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -175,51 +166,42 @@ class MainActivity : AppCompatActivity() {
         val igbaFolder = File(docsDir, "igba")
         val coversFolder = File(igbaFolder, "covers")
 
-        if (!igbaFolder.exists()) {
-            igbaFolder.mkdirs()
-        }
-        if (!coversFolder.exists()) {
-            coversFolder.mkdirs()
-        }
+        if (!igbaFolder.exists()) igbaFolder.mkdirs()
+        if (!coversFolder.exists()) coversFolder.mkdirs()
 
-        // Start Boot PS4 Animation Overlay
-        playPs4BootAnimation()
+        playIgbaBootAnimation()
     }
 
-    // ================= 3. PS4 BOOT ANIMATION =================
+    private fun playIgbaBootAnimation() {
+        igbaSplashOverlay.visibility = View.VISIBLE
 
-    private fun playPs4BootAnimation() {
-        ps4SplashOverlay.visibility = View.VISIBLE
-
-        val tvLogo = findViewById<TextView>(R.id.tv_ps4_logo)
+        val tvLogo = findViewById<TextView>(R.id.tv_igba_logo)
         tvLogo.alpha = 0f
         tvLogo.animate().alpha(1f).setDuration(1200).start()
 
         Handler(Looper.getMainLooper()).postDelayed({
-            val fadeOut = AlphaAnimation(1f, 0f).apply {
-                duration = 800
-            }
-            ps4SplashOverlay.startAnimation(fadeOut)
-            ps4SplashOverlay.visibility = View.GONE
-
-            // Show PS4 Dashboard Screen
-            showPs4Dashboard()
+            val fadeOut = AlphaAnimation(1f, 0f).apply { duration = 800 }
+            igbaSplashOverlay.startAnimation(fadeOut)
+            igbaSplashOverlay.visibility = View.GONE
+            showIgbaDashboard()
         }, 2800)
     }
 
-    // ================= 4. PS4 DASHBOARD & ROM SCANNING =================
-
-    private fun showPs4Dashboard() {
+    private fun showIgbaDashboard() {
         gbaView.stopLoop()
         emulatorLayout.visibility = View.GONE
-        ps4DashboardLayout.visibility = View.VISIBLE
-
+        igbaDashboardLayout.visibility = View.VISIBLE
         scanIgbaDirectory()
     }
 
     @SuppressLint("NotifyDataSetChanged")
     private fun scanIgbaDirectory() {
         gamesList.clear()
+
+        // 1. Scan Assets Folder `gms`
+        scanAssetsGmsFolder()
+
+        // 2. Scan External Directory `/Documents/igba/`
         val docsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val igbaFolder = File(docsDir, "igba")
         val coversFolder = File(igbaFolder, "covers")
@@ -239,7 +221,7 @@ class MainActivity : AppCompatActivity() {
                     bitmap = BitmapFactory.decodeFile(coverImage.absolutePath)
                 }
 
-                gamesList.add(GameModel(gameTitle, romFile, bitmap))
+                gamesList.add(GameModel(gameTitle, romFile, assetPath = null, coverBitmap = bitmap, isAsset = false))
             }
         }
 
@@ -247,23 +229,62 @@ class MainActivity : AppCompatActivity() {
 
         if (gamesList.isNotEmpty()) {
             val firstGame = gamesList[0]
+            tvUserProfile.text = "🎮 ${firstGame.title}"
             tvSelectedGameTitle.text = firstGame.title
-            tvSelectedGameSub.text = "File: ${firstGame.file.name}"
+            tvSelectedGameSub.text = if (firstGame.isAsset) "Built-in IGBA HEN Game" else "File: ${firstGame.file?.name}"
         } else {
+            tvUserProfile.text = "🎮 IGBA System"
             tvSelectedGameTitle.text = "No Games Found"
             tvSelectedGameSub.text = "Put .gba files in Documents/igba/ directory"
         }
     }
 
+    private fun scanAssetsGmsFolder() {
+        try {
+            val gmsFiles = assets.list("gms") ?: return
+            for (filename in gmsFiles) {
+                if (filename.lowercase().endsWith(".gba") || filename.lowercase().endsWith(".zip")) {
+                    val gameTitle = File(filename).nameWithoutExtension
+                    var coverBitmap: Bitmap? = null
+
+                    // Auto Match Cover in assets `gms/cover`
+                    val extensions = arrayOf("png", "jpg", "jpeg")
+                    for (ext in extensions) {
+                        try {
+                            val stream = assets.open("gms/cover/$gameTitle.$ext")
+                            coverBitmap = BitmapFactory.decodeStream(stream)
+                            stream.close()
+                            break
+                        } catch (_: Exception) {}
+                    }
+
+                    gamesList.add(
+                        GameModel(
+                            title = gameTitle,
+                            file = null,
+                            assetPath = "gms/$filename",
+                            coverBitmap = coverBitmap,
+                            isAsset = true
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun promptChangeCover(game: GameModel) {
+        if (game.isAsset) {
+            Toast.makeText(this, "Game Bawaan Asset tidak bisa ganti cover!", Toast.LENGTH_SHORT).show()
+            return
+        }
         selectedGameForCover = game
         AlertDialog.Builder(this)
             .setTitle("Custom Cover Art")
             .setMessage("Change thumbnail art for ${game.title}?")
             .setPositiveButton("Select Image") { _, _ ->
-                val intent = Intent(Intent.ACTION_PICK).apply {
-                    type = "image/*"
-                }
+                val intent = Intent(Intent.ACTION_PICK).apply { type = "image/*" }
                 pickCoverLauncher.launch(intent)
             }
             .setNegativeButton("Cancel", null)
@@ -278,9 +299,7 @@ class MainActivity : AppCompatActivity() {
             val targetCover = File(coversFolder, "${game.title}.png")
 
             contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(targetCover).use { output ->
-                    input.copyTo(output)
-                }
+                FileOutputStream(targetCover).use { output -> input.copyTo(output) }
             }
 
             Toast.makeText(this, "Cover Updated!", Toast.LENGTH_SHORT).show()
@@ -291,17 +310,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ================= 5. SEAMLESS EMULATOR LAUNCH =================
-
     private fun launchGame(game: GameModel) {
-        ps4DashboardLayout.visibility = View.GONE
+        igbaDashboardLayout.visibility = View.GONE
         emulatorLayout.visibility = View.VISIBLE
 
-        val isLoaded = gbaView.loadRom(game.file.absolutePath)
-        if (isLoaded) {
-            Toast.makeText(this, "Playing: ${game.title}", Toast.LENGTH_SHORT).show()
+        val romFilePath = if (game.isAsset && game.assetPath != null) {
+            copyAssetToCache(game.assetPath)
         } else {
-            Toast.makeText(this, "Gagal memuat ROM GBA", Toast.LENGTH_LONG).show()
+            game.file?.absolutePath
+        }
+
+        if (romFilePath != null) {
+            val isLoaded = gbaView.loadRom(romFilePath)
+            if (isLoaded) {
+                Toast.makeText(this, "Playing: ${game.title}", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Gagal memuat ROM GBA", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun copyAssetToCache(assetPath: String): String? {
+        return try {
+            val inputStream: InputStream = assets.open(assetPath)
+            val tempFile = File(cacheDir, "temp_asset_game.gba")
+            val outputStream = FileOutputStream(tempFile)
+
+            inputStream.use { input -> outputStream.use { output -> input.copyTo(output) } }
+            tempFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
@@ -311,13 +350,9 @@ class MainActivity : AppCompatActivity() {
             val tempFile = File(cacheDir, "current_game.gba")
             val outputStream = FileOutputStream(tempFile)
 
-            inputStream?.use { input ->
-                outputStream.use { output ->
-                    input.copyTo(output)
-                }
-            }
+            inputStream?.use { input -> outputStream.use { output -> input.copyTo(output) } }
 
-            ps4DashboardLayout.visibility = View.GONE
+            igbaDashboardLayout.visibility = View.GONE
             emulatorLayout.visibility = View.VISIBLE
 
             val isLoaded = gbaView.loadRom(tempFile.absolutePath)
@@ -331,8 +366,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
-    // ================= CONTROLLER ENGINE INTEGRATION =================
 
     private fun registerButton(viewId: Int, bitmask: Int) {
         val btnView = findViewById<View>(viewId) ?: return

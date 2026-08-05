@@ -39,11 +39,11 @@
             app:layout_constraintTop_toTopOf="parent" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_back_ps4"
+            android:id="@+id/btn_back_igba"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_marginTop="16dp"
-            android:text="PS MENU"
+            android:text="IGBA MENU"
             android:textSize="12sp"
             android:textColor="#FFFFFF"
             app:backgroundTint="#0072CE"
@@ -194,19 +194,19 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- ================= PS4 DASHBOARD HOME SCREEN ================= -->
+    <!-- ================= IGBA DASHBOARD HOME SCREEN ================= -->
     <RelativeLayout
-        android:id="@+id/ps4_dashboard_layout"
+        android:id="@+id/igba_dashboard_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#051329"
         android:visibility="gone">
 
-        <!-- Top Header Status Bar PS4 Style -->
+        <!-- Top Header Status Bar IGBA Style -->
         <RelativeLayout
-            android:id="@+id/ps4_top_bar"
+            android:id="@+id/igba_top_bar"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
+            android:layout_height="60dp"
             android:paddingStart="24dp"
             android:paddingEnd="24dp">
 
@@ -215,20 +215,46 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
-                android:text="🎮 PlayStation GBA System"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:maxWidth="320dp"
+                android:text="🎮 IGBA System"
                 android:textColor="#E0E6ED"
-                android:textSize="14sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/tv_folder_info"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
-                android:text="Storage: /Documents/igba/"
-                android:textColor="#8A99AD"
-                android:textSize="12sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_folder_info"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="12dp"
+                    android:text="Storage: /Documents/igba/"
+                    android:textColor="#8A99AD"
+                    android:textSize="11sp" />
+
+                <!-- Tombol Load Outside ROM Pindah ke Atas -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_manual_pick_rom"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="➕ Load ROM"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    app:backgroundTint="#1F2937"
+                    app:cornerRadius="18dp"
+                    app:strokeColor="#374151"
+                    app:strokeWidth="1dp" />
+            </LinearLayout>
         </RelativeLayout>
 
         <!-- Dynamic Game Title & Info Panel -->
@@ -236,8 +262,8 @@
             android:id="@+id/game_info_panel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_below="@id/ps4_top_bar"
-            android:layout_marginTop="10dp"
+            android:layout_below="@id/igba_top_bar"
+            android:layout_marginTop="4dp"
             android:orientation="vertical"
             android:paddingStart="40dp">
 
@@ -245,9 +271,11 @@
                 android:id="@+id/tv_selected_game_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Select A Game"
                 android:textColor="#FFFFFF"
-                android:textSize="28sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -256,41 +284,27 @@
                 android:layout_height="wrap_content"
                 android:text="Press A/Tap to Play • Hold to change cover art"
                 android:textColor="#00A3FF"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Horizontal Game List RecyclerView -->
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_ps4_games"
+            android:id="@+id/rv_igba_games"
             android:layout_width="match_parent"
-            android:layout_height="220dp"
+            android:layout_height="240dp"
             android:layout_below="@id/game_info_panel"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="16dp"
             android:clipToPadding="false"
             android:orientation="horizontal"
             android:paddingStart="32dp"
             android:paddingEnd="32dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-        <!-- Floating Manual Add ROM Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_manual_pick_rom"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_centerHorizontal="true"
-            android:layout_marginBottom="16dp"
-            android:text="➕ Load Outside ROM"
-            android:textColor="#FFFFFF"
-            app:backgroundTint="#1F2937"
-            app:cornerRadius="20dp"
-            app:strokeColor="#374151"
-            app:strokeWidth="1dp" />
     </RelativeLayout>
 
-    <!-- ================= PS4 BOOT SPLASH SCREEN OVERLAY ================= -->
+    <!-- ================= IGBA HEN BOOT SPLASH SCREEN OVERLAY ================= -->
     <RelativeLayout
-        android:id="@+id/ps4_splash_overlay"
+        android:id="@+id/igba_splash_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#000000"
@@ -304,23 +318,23 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/tv_ps4_logo"
+                android:id="@+id/tv_igba_logo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="PS4"
-                android:textColor="#00439C"
-                android:textSize="72sp"
+                android:text="IGBA HEN"
+                android:textColor="#0072CE"
+                android:textSize="64sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tv_ps4_sub"
+                android:id="@+id/tv_igba_sub"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:letterSpacing="0.2"
-                android:text="PlayStation GBA Architecture"
+                android:text="IGameBoy Homebrew Architecture"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
         </LinearLayout>
     </RelativeLayout>
 
