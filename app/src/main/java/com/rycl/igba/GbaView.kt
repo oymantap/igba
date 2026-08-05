@@ -17,7 +17,7 @@ class GbaView @JvmOverloads constructor(
     private val engine = GbaEngine()
     private val bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
     private val paint = Paint().apply {
-        isFilterBitmap = false // mempertahankan pixel-art tajam (no blur)
+        isFilterBitmap = false // Preserves crisp pixel-art rendering
     }
 
     private var isRunning = false
@@ -56,7 +56,7 @@ class GbaView @JvmOverloads constructor(
 
     override fun run() {
         var lastTime = System.nanoTime()
-        val nsPerFrame = 1_000_000_000.0 / 60.0 // Target ~60 FPS
+        val nsPerFrame = 1_000_000_000.0 / 60.0 // 60 FPS target loop
 
         while (isRunning) {
             val now = System.nanoTime()

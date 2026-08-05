@@ -5,7 +5,8 @@ import android.graphics.Bitmap
 class GbaEngine {
 
     init {
-        System.loadLibrary("igameboy") // sesuaikan jika nama lib NDK kamu beda di CMakeLists
+        // Nama library disesuaikan persis dengan add_library(igameboy ...) di CMakeLists.txt
+        System.loadLibrary("igameboy")
     }
 
     external fun nativeInit()

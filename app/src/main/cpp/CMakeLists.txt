@@ -3,11 +3,12 @@ project("igameboy")
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Definisikan macro INLINE & PTH
+# Wajib tambahkan LOAD_FROM_MEMORY agar retro_load_game menggunakan game->data
 add_compile_definitions(
     INLINE=inline
     ANDROID
     HAVE_PTH
+    LOAD_FROM_MEMORY
 )
 
 # Core Sources
@@ -16,7 +17,7 @@ file(GLOB_RECURSE CORE_SOURCES "src/*.c" "src/*.cpp")
 # Common Sources
 file(GLOB_RECURSE LIBRETRO_COMMON_SOURCES "libretro-common/*.c")
 
-# EXCLUDE file xenon/sdl yang bikin build hancur!
+# EXCLUDE file xenon/sdl yang bikin build crash
 list(FILTER LIBRETRO_COMMON_SOURCES EXCLUDE REGEX ".*xenon_sdl_threads\\.c$")
 list(FILTER LIBRETRO_COMMON_SOURCES EXCLUDE REGEX ".*xenon_threads\\.c$")
 
@@ -25,15 +26,16 @@ set(NATIVE_SOURCES
     libretro/libretro.c
 )
 
+# Nama target library disesuaikan secara konsisten: igameboy
 add_library(
-    igba_core
+    igameboy
     SHARED
     ${NATIVE_SOURCES}
     ${CORE_SOURCES}
     ${LIBRETRO_COMMON_SOURCES}
 )
 
-target_include_directories(igba_core PRIVATE
+target_include_directories(igameboy PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/libretro
     ${CMAKE_CURRENT_SOURCE_DIR}/libretro-common/include
@@ -44,7 +46,7 @@ find_library(log-lib log)
 find_library(jnigraphics-lib jnigraphics)
 
 target_link_libraries(
-    igba_core
+    igameboy
     ${log-lib}
     ${jnigraphics-lib}
 )

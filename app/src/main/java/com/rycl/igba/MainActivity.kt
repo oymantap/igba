@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnOpenRom: FloatingActionButton
     private var currentKeys = 0
 
-    // Constant Bitmask Libretro Joypad Standard
+    // Standard Bitmask Libretro Joypad Constants (Disesuaikan dengan libretro.h)
     companion object {
         const val DEVICE_ID_JOYPAD_B = 0
         const val DEVICE_ID_JOYPAD_Y = 1
@@ -35,8 +35,9 @@ class MainActivity : AppCompatActivity() {
         const val DEVICE_ID_JOYPAD_LEFT = 6
         const val DEVICE_ID_JOYPAD_RIGHT = 7
         const val DEVICE_ID_JOYPAD_A = 8
-        const val DEVICE_ID_JOYPAD_R = 9
+        const val DEVICE_ID_JOYPAD_X = 9
         const val DEVICE_ID_JOYPAD_L = 10
+        const val DEVICE_ID_JOYPAD_R = 11
     }
 
     private val openRomLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
