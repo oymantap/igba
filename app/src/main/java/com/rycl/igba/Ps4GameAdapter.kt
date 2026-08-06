@@ -29,7 +29,8 @@ class Ps4GameAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GameViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_ps4_game, parent, false)
+        val view = LayoutInflater.from(parent.context)
+            .inflate(R.layout.item_ps4_game, parent, false)
         return GameViewHolder(view)
     }
 
@@ -45,11 +46,10 @@ class Ps4GameAdapter(
             holder.imgCover.setImageBitmap(generateLetterCover(game.title))
         }
 
-        // Terapkan efek scaling & elevasi
         applySelectionAnimation(holder.itemView, isSelected, animate = false)
 
         holder.itemView.setOnClickListener {
-            val currentPos = holder.bindingAdapterPosition
+            val currentPos = holder.adapterPosition
             if (currentPos != RecyclerView.NO_POSITION) {
                 if (selectedPosition != currentPos) {
                     val oldPos = selectedPosition
@@ -70,8 +70,10 @@ class Ps4GameAdapter(
 
         holder.itemView.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                val currentPos = holder.bindingAdapterPosition
-                if (currentPos != RecyclerView.NO_POSITION && selectedPosition != currentPos) {
+                val currentPos = holder.adapterPosition
+                if (currentPos != RecyclerView.NO_POSITION &&
+                    selectedPosition != currentPos
+                ) {
                     val oldPos = selectedPosition
                     selectedPosition = currentPos
                     notifyItemChanged(oldPos)
@@ -113,14 +115,30 @@ class Ps4GameAdapter(
 
         val paintGradient = Paint().apply {
             shader = LinearGradient(
-                0f, 0f, width.toFloat(), height.toFloat(),
-                Color.parseColor("#1E3C72"), Color.parseColor("#2A5298"),
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                Color.parseColor("#1E3C72"),
+                Color.parseColor("#2A5298"),
                 Shader.TileMode.CLAMP
             )
         }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paintGradient)
 
-        val initialLetter = if (title.isNotBlank()) title.substring(0, 1).uppercase(Locale.ROOT) else "G"
+        canvas.drawRect(
+            0f,
+            0f,
+            width.toFloat(),
+            height.toFloat(),
+            paintGradient
+        )
+
+        val initialLetter =
+            if (title.isNotBlank())
+                title.substring(0, 1).uppercase(Locale.ROOT)
+            else
+                "G"
+
         val paintText = Paint().apply {
             color = Color.WHITE
             textSize = 120f
@@ -129,8 +147,15 @@ class Ps4GameAdapter(
             isFakeBoldText = true
         }
 
-        val yPos = (canvas.height / 2f) - ((paintText.descent() + paintText.ascent()) / 2f)
-        canvas.drawText(initialLetter, canvas.width / 2f, yPos, paintText)
+        val yPos =
+            (canvas.height / 2f) - ((paintText.descent() + paintText.ascent()) / 2f)
+
+        canvas.drawText(
+            initialLetter,
+            canvas.width / 2f,
+            yPos,
+            paintText
+        )
 
         return bitmap
     }
