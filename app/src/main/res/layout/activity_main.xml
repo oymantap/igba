@@ -65,9 +65,9 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- D-PAD AREA -->
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/dpad_container"
+        <!-- D-PAD AREA (Bisa di-switch ke Analog) -->
+        <FrameLayout
+            android:id="@+id/dpad_analog_container"
             android:layout_width="150dp"
             android:layout_height="150dp"
             android:layout_marginStart="20dp"
@@ -75,58 +75,96 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_up"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="0dp"
-                android:text="▲"
-                android:textColor="#FFFFFF"
-                app:backgroundTint="#40FFFFFF"
-                app:cornerRadius="8dp"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+            <!-- D-PAD Standard -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/dpad_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_left"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="0dp"
-                android:text="◀"
-                android:textColor="#FFFFFF"
-                app:backgroundTint="#40FFFFFF"
-                app:cornerRadius="8dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_up"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="0dp"
+                    android:text="▲"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#40FFFFFF"
+                    app:cornerRadius="8dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_right"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="0dp"
-                android:text="▶"
-                android:textColor="#FFFFFF"
-                app:backgroundTint="#40FFFFFF"
-                app:cornerRadius="8dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_left"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="0dp"
+                    android:text="◀"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#40FFFFFF"
+                    app:cornerRadius="8dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_down"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="0dp"
-                android:text="▼"
-                android:textColor="#FFFFFF"
-                app:backgroundTint="#40FFFFFF"
-                app:cornerRadius="8dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent" />
-        </androidx.constraintlayout.widget.ConstraintLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_right"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="0dp"
+                    android:text="▶"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#40FFFFFF"
+                    app:cornerRadius="8dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_down"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="0dp"
+                    android:text="▼"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#40FFFFFF"
+                    app:cornerRadius="8dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Analog Stick Visual View Mode -->
+            <RelativeLayout
+                android:id="@+id/analog_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_analog_base"
+                android:visibility="gone">
+
+                <View
+                    android:id="@+id/analog_thumb"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:layout_centerInParent="true"
+                    android:background="@drawable/bg_analog_thumb" />
+            </RelativeLayout>
+        </FrameLayout>
+
+        <!-- Tombol Bulat Kecil Toggle Switch D-Pad / Analog -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_toggle_analog"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginBottom="135dp"
+            android:padding="0dp"
+            android:text="🔘"
+            android:textSize="12sp"
+            app:backgroundTint="#55FFFFFF"
+            app:cornerRadius="18dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toEndOf="@id/dpad_analog_container" />
 
         <!-- ACTION BUTTONS A/B -->
         <com.google.android.material.button.MaterialButton
@@ -159,15 +197,29 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- START & SELECT -->
+        <!-- START, SELECT, AND FAST FORWARD -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
+
+            <!-- Tombol Percepat / Fast Forward (Tahan seperti PPSSPP) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_fast_forward"
+                android:layout_width="50dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:padding="0dp"
+                android:text="⏩"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                app:backgroundTint="#55FF9800"
+                app:cornerRadius="18dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_select"
@@ -217,7 +269,7 @@
                 android:layout_centerVertical="true"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:maxWidth="320dp"
+                android:maxWidth="280dp"
                 android:text="🎮 IGBA System"
                 android:textColor="#E0E6ED"
                 android:textSize="16sp"
@@ -240,11 +292,11 @@
                     android:textColor="#8A99AD"
                     android:textSize="11sp" />
 
-                <!-- Tombol Load Outside ROM Pindah ke Atas -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_manual_pick_rom"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
+                    android:layout_marginEnd="8dp"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp"
                     android:text="➕ Load ROM"
@@ -254,6 +306,19 @@
                     app:cornerRadius="18dp"
                     app:strokeColor="#374151"
                     app:strokeWidth="1dp" />
+
+                <!-- Tombol Settings -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_settings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="⚙️ Settings"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    app:backgroundTint="#0072CE"
+                    app:cornerRadius="18dp" />
             </LinearLayout>
         </RelativeLayout>
 
@@ -338,16 +403,14 @@
         </LinearLayout>
     </RelativeLayout>
 
-    <!-- ... Bagian Splash Screen Overlay lu di sini ... -->
-
     <!-- ================= DEBUG OVERLAY HUD ================= -->
     <TextView
         android:id="@+id/tv_debug_hud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:layout_marginTop="16dp"
         android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
         android:background="#DD000000"
         android:fontFamily="monospace"
         android:padding="12dp"

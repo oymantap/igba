@@ -28,6 +28,9 @@ class GbaView @JvmOverloads constructor(
     private var isRomLoaded = false
     private var renderThread: Thread? = null
 
+    @Volatile
+    private var isFastForward = false
+
     private val srcRect = Rect(0, 0, 240, 160)
     private val dstRect = Rect()
 
@@ -38,6 +41,10 @@ class GbaView @JvmOverloads constructor(
         initAudio()
     }
 
+    fun setFastForward(enabled: Boolean) {
+        isFastForward = enabled
+    }
+
     private fun initAudio() {
         val sampleRate = 32000 // GBA System Native Audio Output
         val minBufferSize = AudioTrack.getMinBufferSize(
@@ -46,26 +53,30 @@ class GbaView @JvmOverloads constructor(
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        // Penambahan Buffer Headroom 4x untuk mencegah underrun/stutter
+        // Buffer Headroom 4x untuk mencegah audio underrun/stutter
         val bufferSize = if (minBufferSize > 0) minBufferSize * 4 else 8192
 
-        audioTrack = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
+        try {
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_GAME)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun loadRom(path: String): Boolean {
@@ -85,7 +96,9 @@ class GbaView @JvmOverloads constructor(
         if (isRunning) return
         isRunning = true
         try {
-            audioTrack?.play()
+            if (audioTrack?.state == AudioTrack.STATE_INITIALIZED) {
+                audioTrack?.play()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -112,26 +125,42 @@ class GbaView @JvmOverloads constructor(
 
     override fun run() {
         var lastTime = System.nanoTime()
-        val nsPerFrame = 1_000_000_000.0 / 60.0
+        var frameSkipCounter = 0
 
         while (isRunning) {
-            val now = System.nanoTime()
-            if (now - lastTime >= nsPerFrame) {
-                if (isRomLoaded) {
-                    engine.nativeStepFrame(bitmap)
-                    postInvalidateOnAnimation()
+            // Jika Fast Forward -> Target 180 FPS (3x Speed), Normal -> 60 FPS
+            val targetFps = if (isFastForward) 180.0 else 60.0
+            val nsPerFrame = 1_000_000_000.0 / targetFps
 
+            val now = System.nanoTime()
+            val delta = now - lastTime
+
+            if (delta >= nsPerFrame) {
+                if (isRomLoaded) {
+                    // Step emulasi frame
+                    engine.nativeStepFrame(bitmap)
+
+                    // Skip canvas rendering jika telat berat
+                    if (delta > nsPerFrame * 1.5 && frameSkipCounter < 2) {
+                        frameSkipCounter++
+                    } else {
+                        frameSkipCounter = 0
+                        postInvalidateOnAnimation()
+                    }
+
+                    // Audio Buffer Handler
                     val audioData = engine.nativeReadAudio()
                     if (audioData != null && audioData.isNotEmpty() && isRunning) {
-                        try {
-                            audioTrack?.write(
-                                audioData, 
-                                0, 
-                                audioData.size, 
-                                AudioTrack.WRITE_NON_BLOCKING
-                            )
-                        } catch (e: Exception) {
-                            // Prevent crash during teardown
+                        // Jangan putar audio berisik saat fast forward
+                        if (!isFastForward) {
+                            try {
+                                audioTrack?.write(
+                                    audioData,
+                                    0,
+                                    audioData.size,
+                                    AudioTrack.WRITE_NON_BLOCKING
+                                )
+                            } catch (_: Exception) {}
                         }
                     }
                 }
@@ -139,7 +168,7 @@ class GbaView @JvmOverloads constructor(
             } else {
                 try {
                     Thread.sleep(1)
-                } catch (e: InterruptedException) {
+                } catch (_: InterruptedException) {
                     break
                 }
             }

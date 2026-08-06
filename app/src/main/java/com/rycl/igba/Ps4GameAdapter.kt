@@ -35,35 +35,31 @@ class Ps4GameAdapter(
 
     override fun onBindViewHolder(holder: GameViewHolder, position: Int) {
         val game = games[position]
-        val isSelected = position == selectedPosition
+        val isSelected = (position == selectedPosition)
 
         holder.tvTitle.text = game.title
 
         if (game.coverBitmap != null) {
             holder.imgCover.setImageBitmap(game.coverBitmap)
         } else {
-            val generatedCover = generateLetterCover(game.title)
-            holder.imgCover.setImageBitmap(generatedCover)
+            holder.imgCover.setImageBitmap(generateLetterCover(game.title))
         }
 
-        // Efek Mengembang Mengkerut (Animation Scaling ala PS4 Selected Item)
-        if (isSelected) {
-            holder.itemView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(180).start()
-            holder.itemView.elevation = 16f
-        } else {
-            holder.itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(180).start()
-            holder.itemView.elevation = 4f
-        }
+        // Terapkan efek scaling & elevasi
+        applySelectionAnimation(holder.itemView, isSelected, animate = false)
 
         holder.itemView.setOnClickListener {
-            if (selectedPosition != holder.adapterPosition) {
-                val oldPos = selectedPosition
-                selectedPosition = holder.adapterPosition
-                notifyItemChanged(oldPos)
-                notifyItemChanged(selectedPosition)
-                onItemFocused(game)
-            } else {
-                onItemClick(game)
+            val currentPos = holder.bindingAdapterPosition
+            if (currentPos != RecyclerView.NO_POSITION) {
+                if (selectedPosition != currentPos) {
+                    val oldPos = selectedPosition
+                    selectedPosition = currentPos
+                    notifyItemChanged(oldPos)
+                    notifyItemChanged(selectedPosition)
+                    onItemFocused(game)
+                } else {
+                    onItemClick(game)
+                }
             }
         }
 
@@ -74,16 +70,40 @@ class Ps4GameAdapter(
 
         holder.itemView.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                val oldPos = selectedPosition
-                selectedPosition = holder.adapterPosition
-                notifyItemChanged(oldPos)
-                notifyItemChanged(selectedPosition)
-                onItemFocused(game)
+                val currentPos = holder.bindingAdapterPosition
+                if (currentPos != RecyclerView.NO_POSITION && selectedPosition != currentPos) {
+                    val oldPos = selectedPosition
+                    selectedPosition = currentPos
+                    notifyItemChanged(oldPos)
+                    notifyItemChanged(selectedPosition)
+                    onItemFocused(game)
+                }
             }
         }
     }
 
     override fun getItemCount(): Int = games.size
+
+    private fun applySelectionAnimation(view: View, isSelected: Boolean, animate: Boolean) {
+        val targetScale = if (isSelected) 1.15f else 1.0f
+        val targetElevation = if (isSelected) 16f else 4f
+        val targetAlpha = if (isSelected) 1.0f else 0.75f
+
+        if (animate) {
+            view.animate()
+                .scaleX(targetScale)
+                .scaleY(targetScale)
+                .translationZ(targetElevation)
+                .alpha(targetAlpha)
+                .setDuration(180)
+                .start()
+        } else {
+            view.scaleX = targetScale
+            view.scaleY = targetScale
+            view.translationZ = targetElevation
+            view.alpha = targetAlpha
+        }
+    }
 
     private fun generateLetterCover(title: String): Bitmap {
         val width = 300
@@ -91,13 +111,13 @@ class Ps4GameAdapter(
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val paintGradient = Paint()
-        val gradient = LinearGradient(
-            0f, 0f, width.toFloat(), height.toFloat(),
-            Color.parseColor("#1E3C72"), Color.parseColor("#2A5298"),
-            Shader.TileMode.CLAMP
-        )
-        paintGradient.shader = gradient
+        val paintGradient = Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, width.toFloat(), height.toFloat(),
+                Color.parseColor("#1E3C72"), Color.parseColor("#2A5298"),
+                Shader.TileMode.CLAMP
+            )
+        }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paintGradient)
 
         val initialLetter = if (title.isNotBlank()) title.substring(0, 1).uppercase(Locale.ROOT) else "G"

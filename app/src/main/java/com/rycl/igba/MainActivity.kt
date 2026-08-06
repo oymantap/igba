@@ -23,6 +23,7 @@ import android.view.animation.AlphaAnimation
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -44,22 +45,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSelectedGameSub: TextView
     private lateinit var btnBackIgba: MaterialButton
     private lateinit var btnManualPickRom: MaterialButton
+    private lateinit var btnSettings: MaterialButton
     
+    // NEW CONTROLS
+    private lateinit var dpadContainer: View
+    private lateinit var analogContainer: View
+    private lateinit var btnToggleAnalog: MaterialButton
+    private lateinit var btnFastForward: MaterialButton
+    private var isAnalogMode = false
+
+    // EXIT GUARD (DOUBLE BACK PRESS)
+    private var backPressedOnce = false
+    private var currentDialog: AlertDialog? = null
+
     // DEBUG HUD COMPONENTS
     private lateinit var tvDebugHud: TextView
     private val debugHandler = Handler(Looper.getMainLooper())
     private var isDebugVisible = false
 
-    // Secret Cheat Sequence: UP, DOWN, UP, DOWN, A, B, L, R
     private val secretCheatCode = listOf(
-        DEVICE_ID_JOYPAD_UP,
-        DEVICE_ID_JOYPAD_DOWN,
-        DEVICE_ID_JOYPAD_UP,
-        DEVICE_ID_JOYPAD_DOWN,
-        DEVICE_ID_JOYPAD_A,
-        DEVICE_ID_JOYPAD_B,
-        DEVICE_ID_JOYPAD_L,
-        DEVICE_ID_JOYPAD_R
+        DEVICE_ID_JOYPAD_UP, DEVICE_ID_JOYPAD_DOWN,
+        DEVICE_ID_JOYPAD_UP, DEVICE_ID_JOYPAD_DOWN,
+        DEVICE_ID_JOYPAD_A, DEVICE_ID_JOYPAD_B,
+        DEVICE_ID_JOYPAD_L, DEVICE_ID_JOYPAD_R
     )
     private val keyHistory = ArrayDeque<Int>()
 
@@ -129,6 +137,7 @@ class MainActivity : AppCompatActivity() {
         hideSystemUI()
         initViews()
         setupController()
+        setupBackButtonHandler()
         requestStoragePermissions()
     }
 
@@ -143,12 +152,59 @@ class MainActivity : AppCompatActivity() {
         tvSelectedGameSub = findViewById(R.id.tv_selected_game_sub)
         btnBackIgba = findViewById(R.id.btn_back_igba)
         btnManualPickRom = findViewById(R.id.btn_manual_pick_rom)
-        
-        // Init Debug Overlay View
+        btnSettings = findViewById(R.id.btn_settings)
+
+        // New Layout Controls
+        dpadContainer = findViewById(R.id.dpad_container)
+        analogContainer = findViewById(R.id.analog_container)
+        btnToggleAnalog = findViewById(R.id.btn_toggle_analog)
+        btnFastForward = findViewById(R.id.btn_fast_forward)
+
         tvDebugHud = findViewById(R.id.tv_debug_hud)
 
         btnManualPickRom.setOnClickListener { openFilePicker() }
         btnBackIgba.setOnClickListener { showIgbaDashboard() }
+        
+        // Tombol Settings -> Buka SettingsActivity
+        btnSettings.setOnClickListener {
+            try {
+                val intent = Intent(this, Class.forName("com.rycl.igba.SettingsActivity"))
+                startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "SettingsActivity belum dibuat!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // Toggle Switch Analog / D-Pad
+        btnToggleAnalog.setOnClickListener {
+            isAnalogMode = !isAnalogMode
+            if (isAnalogMode) {
+                dpadContainer.visibility = View.GONE
+                analogContainer.visibility = View.VISIBLE
+                btnToggleAnalog.text = "🎯"
+            } else {
+                dpadContainer.visibility = View.VISIBLE
+                analogContainer.visibility = View.GONE
+                btnToggleAnalog.text = "🔘"
+            }
+        }
+
+        // Fast Forward Button Listener (Hold Like PPSSPP)
+        btnFastForward.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    gbaView.setFastForward(true)
+                    btnFastForward.alpha = 0.5f
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    gbaView.setFastForward(false)
+                    btnFastForward.alpha = 1.0f
+                    true
+                }
+                else -> false
+            }
+        }
 
         ps4Adapter = Ps4GameAdapter(
             games = gamesList,
@@ -161,6 +217,38 @@ class MainActivity : AppCompatActivity() {
             }
         )
         rvIgbaGames.adapter = ps4Adapter
+    }
+
+    private fun setupBackButtonHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // 1. Jika dialog aktif -> tutup dialognya saja
+                if (currentDialog != null && currentDialog!!.isShowing) {
+                    currentDialog?.dismiss()
+                    currentDialog = null
+                    return
+                }
+
+                // 2. Jika sedang bermain emulator -> kembali ke Dashboard
+                if (emulatorLayout.visibility == View.VISIBLE) {
+                    showIgbaDashboard()
+                    return
+                }
+
+                // 3. Jika di Home Dashboard -> Minta tekan 2x untuk Exit App
+                if (backPressedOnce) {
+                    finish()
+                    return
+                }
+
+                backPressedOnce = true
+                Toast.makeText(this@MainActivity, "Tekan sekali lagi untuk keluar", Toast.LENGTH_SHORT).show()
+
+                Handler(Looper.getMainLooper()).postDelayed({
+                    backPressedOnce = false
+                }, 2000)
+            }
+        })
     }
 
     private fun requestStoragePermissions() {
@@ -219,11 +307,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("NotifyDataSetChanged")
     private fun scanIgbaDirectory() {
         gamesList.clear()
-
-        // 1. Scan Assets Folder `gms`
         scanAssetsGmsFolder()
 
-        // 2. Scan External Directory `/Documents/igba/`
         val docsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val igbaFolder = File(docsDir, "igba")
         val coversFolder = File(igbaFolder, "covers")
@@ -269,7 +354,6 @@ class MainActivity : AppCompatActivity() {
                     val gameTitle = File(filename).nameWithoutExtension
                     var coverBitmap: Bitmap? = null
 
-                    // Auto Match Cover in assets `gms/cover`
                     val extensions = arrayOf("png", "jpg", "jpeg")
                     for (ext in extensions) {
                         try {
@@ -302,7 +386,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         selectedGameForCover = game
-        AlertDialog.Builder(this)
+        currentDialog = AlertDialog.Builder(this)
             .setTitle("Custom Cover Art")
             .setMessage("Change thumbnail art for ${game.title}?")
             .setPositiveButton("Select Image") { _, _ ->
@@ -442,8 +526,7 @@ class MainActivity : AppCompatActivity() {
             if (btn.isPressed != shouldBePressed) {
                 btn.isPressed = shouldBePressed
                 updateButtonVisuals(btn.view, shouldBePressed)
-                
-                // Cek secret code jika tombol baru saja ditekan
+
                 if (shouldBePressed) {
                     checkSecretCheat(btn.bitmask)
                 }
@@ -489,13 +572,12 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
                 try {
-                    // Panggil fungsi JNI Native
                     val info = GbaEngine.nativeDebugInfo()
                     tvDebugHud.text = info
                 } catch (e: Exception) {
                     tvDebugHud.text = "Debug Error: ${e.message}"
                 }
-                debugHandler.postDelayed(this, 200) // Update tiap 200ms
+                debugHandler.postDelayed(this, 200)
             }
         }
     }
