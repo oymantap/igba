@@ -36,6 +36,9 @@ class GbaView @JvmOverloads constructor(
 
     private var audioTrack: AudioTrack? = null
 
+    // Reuse buffer biar ga kena Garbage Collector stuttering
+    private val audioBuffer = ShortArray(4096)
+
     init {
         engine.nativeInit()
         initAudio()
@@ -46,7 +49,7 @@ class GbaView @JvmOverloads constructor(
     }
 
     private fun initAudio() {
-        val sampleRate = 44100 // GBA System Native Audio Output
+        val sampleRate = 32000 // 32000 Hz (GBA Native)
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_STEREO,
@@ -128,7 +131,7 @@ class GbaView @JvmOverloads constructor(
         var frameSkipCounter = 0
 
         while (isRunning) {
-            // Jika Fast Forward -> Target 180 FPS (3x Speed), Normal -> 60 FPS
+            // Fast Forward -> Target 180 FPS (3x Speed), Normal -> 60 FPS
             val targetFps = if (isFastForward) 180.0 else 60.0
             val nsPerFrame = 1_000_000_000.0 / targetFps
 
@@ -148,20 +151,24 @@ class GbaView @JvmOverloads constructor(
                         postInvalidateOnAnimation()
                     }
 
-                    // Audio Buffer Handler
-                    val audioData = engine.nativeReadAudio()
-                    if (audioData != null && audioData.isNotEmpty() && isRunning) {
-                        // Jangan putar audio berisik saat fast forward
-                        if (!isFastForward) {
-                            try {
-                                audioTrack?.write(
-                                    audioData,
-                                    0,
-                                    audioData.size,
-                                    AudioTrack.WRITE_NON_BLOCKING
-                                )
-                            } catch (_: Exception) {}
-                        }
+                    // --- BACA AUDIO DARI JNI ---
+                    val count = engine.nativeReadAudio(audioBuffer)
+
+                    if (count > 0 && !isFastForward) {
+                        try {
+                            var offset = 0
+                            while (offset < count) {
+                                val written = audioTrack?.write(
+                                    audioBuffer,
+                                    offset,
+                                    count - offset,
+                                    AudioTrack.WRITE_BLOCKING
+                                ) ?: 0
+
+                                if (written <= 0) break
+                                offset += written
+                            }
+                        } catch (_: Exception) {}
                     }
                 }
                 lastTime = now

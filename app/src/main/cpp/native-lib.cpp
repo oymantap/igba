@@ -19,7 +19,7 @@ static uint16_t g_input_state = 0;
 static enum retro_pixel_format g_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 
 // Ring Buffer Audio untuk mencegah memory growth & stuttering
-#define AUDIO_RING_BUFFER_SIZE 32768
+#define AUDIO_RING_BUFFER_SIZE 65536
 static int16_t g_audio_ring[AUDIO_RING_BUFFER_SIZE];
 static size_t g_audio_head = 0;
 static size_t g_audio_tail = 0;
@@ -196,25 +196,48 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(JNIEnv *env, jobject thiz, jint key
     g_input_state = (uint16_t)keys;
 }
 
-extern "C" JNIEXPORT jshortArray JNICALL
-Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz) {
-    std::lock_guard<std::mutex> lock(g_audio_mutex);
-    if (g_audio_count == 0) return nullptr;
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_rycl_igba_GbaEngine_nativeReadAudio(
+        JNIEnv *env,
+        jobject,
+        jshortArray buffer) {
 
-    jshortArray result = env->NewShortArray(static_cast<jsize>(g_audio_count));
-    if (result) {
-        std::vector<int16_t> temp(g_audio_count);
-        for (size_t i = 0; i < g_audio_count; i++) {
-            temp[i] = g_audio_ring[(g_audio_head + i) % AUDIO_RING_BUFFER_SIZE];
-        }
-        env->SetShortArrayRegion(result, 0, static_cast<jsize>(g_audio_count), temp.data());
+    if (!buffer)
+        return 0;
+
+    std::lock_guard<std::mutex> lock(g_audio_mutex);
+
+    if (g_audio_count == 0)
+        return 0;
+
+    jsize capacity = env->GetArrayLength(buffer);
+
+    size_t samples = std::min(
+            (size_t)capacity,
+            g_audio_count);
+
+    jshort* dst = env->GetShortArrayElements(buffer, nullptr);
+
+    for (size_t i = 0; i < samples; i++) {
+        dst[i] =
+                g_audio_ring[
+                        (g_audio_head + i)
+                        % AUDIO_RING_BUFFER_SIZE];
     }
 
-    g_audio_head = 0;
-    g_audio_tail = 0;
-    g_audio_count = 0;
+    env->ReleaseShortArrayElements(
+            buffer,
+            dst,
+            0);
 
-    return result;
+    g_audio_head =
+            (g_audio_head + samples)
+            % AUDIO_RING_BUFFER_SIZE;
+
+    g_audio_count -= samples;
+
+    return (jint)samples;
 }
 
 // ================= FITUR DEBUG HUD OVERLAY =================

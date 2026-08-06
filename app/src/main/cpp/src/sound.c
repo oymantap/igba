@@ -436,8 +436,8 @@ static INLINE void Gb_Wave_write( Gb_Wave *self, unsigned addr, int data )
  * process_sound_tick_fn clamps avail to sizeof/sizeof of this array so a
  * larger soundSampleRate cannot overrun, though samples beyond the
  * buffer would simply defer to the next frame in that case. */
-static int16_t soundFinalWave[2048];
-long soundSampleRate = 44100;
+static int16_t soundFinalWave[1088];
+long soundSampleRate = 32000;
 int   SOUND_CLOCK_TICKS  = SOUND_CLOCK_TICKS_;
 int   soundTicks         = SOUND_CLOCK_TICKS_;
 
