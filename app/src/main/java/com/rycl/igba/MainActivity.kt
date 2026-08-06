@@ -32,6 +32,10 @@ import com.google.android.material.button.MaterialButton
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity() {
 
@@ -47,18 +51,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnManualPickRom: MaterialButton
     private lateinit var btnSettings: MaterialButton
     
-    // NEW CONTROLS
+    // CONTROLS & ANALOG
     private lateinit var dpadContainer: View
     private lateinit var analogContainer: View
+    private lateinit var analogThumb: View
     private lateinit var btnToggleAnalog: MaterialButton
     private lateinit var btnFastForward: MaterialButton
     private var isAnalogMode = false
 
-    // EXIT GUARD (DOUBLE BACK PRESS)
+    private var analogKeysMask = 0
+
+    // EXIT GUARD
     private var backPressedOnce = false
     private var currentDialog: AlertDialog? = null
 
-    // DEBUG HUD COMPONENTS
+    // DEBUG HUD
     private lateinit var tvDebugHud: TextView
     private val debugHandler = Handler(Looper.getMainLooper())
     private var isDebugVisible = false
@@ -79,7 +86,7 @@ class MainActivity : AppCompatActivity() {
 
     private data class ControllerButton(
         val view: View,
-        val bitmask: Int,
+        val bitmaskList: List<Int>,
         var isPressed: Boolean = false
     )
 
@@ -137,6 +144,7 @@ class MainActivity : AppCompatActivity() {
         hideSystemUI()
         initViews()
         setupController()
+        setupAnalogTouch()
         setupBackButtonHandler()
         requestStoragePermissions()
     }
@@ -154,9 +162,9 @@ class MainActivity : AppCompatActivity() {
         btnManualPickRom = findViewById(R.id.btn_manual_pick_rom)
         btnSettings = findViewById(R.id.btn_settings)
 
-        // New Layout Controls
         dpadContainer = findViewById(R.id.dpad_container)
         analogContainer = findViewById(R.id.analog_container)
+        analogThumb = findViewById(R.id.analog_thumb)
         btnToggleAnalog = findViewById(R.id.btn_toggle_analog)
         btnFastForward = findViewById(R.id.btn_fast_forward)
 
@@ -165,7 +173,6 @@ class MainActivity : AppCompatActivity() {
         btnManualPickRom.setOnClickListener { openFilePicker() }
         btnBackIgba.setOnClickListener { showIgbaDashboard() }
         
-        // Tombol Settings -> Buka SettingsActivity
         btnSettings.setOnClickListener {
             try {
                 val intent = Intent(this, Class.forName("com.rycl.igba.SettingsActivity"))
@@ -175,7 +182,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Toggle Switch Analog / D-Pad
         btnToggleAnalog.setOnClickListener {
             isAnalogMode = !isAnalogMode
             if (isAnalogMode) {
@@ -186,10 +192,11 @@ class MainActivity : AppCompatActivity() {
                 dpadContainer.visibility = View.VISIBLE
                 analogContainer.visibility = View.GONE
                 btnToggleAnalog.text = "🔘"
+                resetAnalogThumb()
             }
         }
 
-        // Fast Forward Button Listener (Hold Like PPSSPP)
+        // Fast Forward Button Listener (Audio Resample Fix)
         btnFastForward.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -219,23 +226,272 @@ class MainActivity : AppCompatActivity() {
         rvIgbaGames.adapter = ps4Adapter
     }
 
+    private fun registerButton(viewId: Int, vararg bitmasks: Int) {
+        val btnView = findViewById<View>(viewId) ?: return
+        registeredButtons.add(ControllerButton(btnView, bitmasks.toList()))
+    }
+
+    private fun setupController() {
+        registeredButtons.clear()
+        // Single Direction D-Pad
+        registerButton(R.id.btn_up, DEVICE_ID_JOYPAD_UP)
+        registerButton(R.id.btn_down, DEVICE_ID_JOYPAD_DOWN)
+        registerButton(R.id.btn_left, DEVICE_ID_JOYPAD_LEFT)
+        registerButton(R.id.btn_right, DEVICE_ID_JOYPAD_RIGHT)
+
+        // Diagonal D-Pad Hotspots (Aktifkan 2 tombol sekaligus)
+        registerButton(R.id.btn_up_left, DEVICE_ID_JOYPAD_UP, DEVICE_ID_JOYPAD_LEFT)
+        registerButton(R.id.btn_up_right, DEVICE_ID_JOYPAD_UP, DEVICE_ID_JOYPAD_RIGHT)
+        registerButton(R.id.btn_down_left, DEVICE_ID_JOYPAD_DOWN, DEVICE_ID_JOYPAD_LEFT)
+        registerButton(R.id.btn_down_right, DEVICE_ID_JOYPAD_DOWN, DEVICE_ID_JOYPAD_RIGHT)
+
+        // Action Buttons
+        registerButton(R.id.btn_a, DEVICE_ID_JOYPAD_A)
+        registerButton(R.id.btn_b, DEVICE_ID_JOYPAD_B)
+        registerButton(R.id.btn_l, DEVICE_ID_JOYPAD_L)
+        registerButton(R.id.btn_r, DEVICE_ID_JOYPAD_R)
+        registerButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
+        registerButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupAnalogTouch() {
+        analogContainer.setOnTouchListener { _, event ->
+            if (!isAnalogMode) return@setOnTouchListener false
+
+            val width = analogContainer.width.toFloat()
+            val height = analogContainer.height.toFloat()
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val maxRadius = (width / 2f) - (analogThumb.width / 2f)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    val touchX = event.x - centerX
+                    val touchY = event.y - centerY
+
+                    val distance = sqrt(touchX * touchX + touchY * touchY)
+                    val angle = atan2(touchY.toDouble(), touchX.toDouble())
+
+                    val constrainedDistance = distance.coerceAtMost(maxRadius)
+                    val thumbX = constrainedDistance * cos(angle).toFloat()
+                    val thumbY = constrainedDistance * sin(angle).toFloat()
+
+                    // Gerakkan visual thumb
+                    analogThumb.translationX = thumbX
+                    analogThumb.translationY = thumbY
+
+                    // Hitung Mask Input Arah berdasarkan Sudut (Angle)
+                    if (distance > 15f) { // Deadzone threshold
+                        var newAnalogMask = 0
+                        val deg = Math.toDegrees(angle)
+
+                        // 8-Way Direction Mapping
+                        if (deg >= -112.5 && deg <= -67.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_UP)
+                        } else if (deg >= -67.5 && deg <= -22.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_UP) or (1 shl DEVICE_ID_JOYPAD_RIGHT)
+                        } else if (deg >= -22.5 && deg <= 22.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_RIGHT)
+                        } else if (deg >= 22.5 && deg <= 67.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_DOWN) or (1 shl DEVICE_ID_JOYPAD_RIGHT)
+                        } else if (deg >= 67.5 && deg <= 112.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_DOWN)
+                        } else if (deg >= 112.5 && deg <= 157.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_DOWN) or (1 shl DEVICE_ID_JOYPAD_LEFT)
+                        } else if (deg >= 157.5 || deg <= -157.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_LEFT)
+                        } else if (deg >= -157.5 && deg <= -112.5) {
+                            newAnalogMask = newAnalogMask or (1 shl DEVICE_ID_JOYPAD_UP) or (1 shl DEVICE_ID_JOYPAD_LEFT)
+                        }
+
+                        analogKeysMask = newAnalogMask
+                    } else {
+                        analogKeysMask = 0
+                    }
+                    updateInputKeys()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    resetAnalogThumb()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun resetAnalogThumb() {
+        analogThumb.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .setDuration(100)
+            .start()
+        analogKeysMask = 0
+        updateInputKeys()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        ev?.let { handleGlobalTouch(it) }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun handleGlobalTouch(event: MotionEvent) {
+        if (emulatorLayout.visibility != View.VISIBLE) return
+
+        val activeMasks = mutableSetOf<Int>()
+        val tempRect = Rect()
+
+        for (pointerIndex in 0 until event.pointerCount) {
+            val action = event.actionMasked
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+                if (pointerIndex == event.actionIndex) continue
+            }
+            if (action == MotionEvent.ACTION_CANCEL) continue
+
+            val x = event.getX(pointerIndex).toInt()
+            val y = event.getY(pointerIndex).toInt()
+
+            for (btn in registeredButtons) {
+                // Jangan hiraukan D-Pad standar jika Mode Analog aktif
+                if (isAnalogMode && isDpadButton(btn.view.id)) continue
+
+                btn.view.getGlobalVisibleRect(tempRect)
+                if (tempRect.contains(x, y)) {
+                    btn.bitmaskList.forEach { activeMasks.add(it) }
+                }
+            }
+        }
+
+        var dpadButtonsMask = 0
+        for (btn in registeredButtons) {
+            if (isAnalogMode && isDpadButton(btn.view.id)) continue
+
+            val shouldBePressed = btn.bitmaskList.any { activeMasks.contains(it) }
+            if (btn.isPressed != shouldBePressed) {
+                btn.isPressed = shouldBePressed
+                updateButtonVisuals(btn.view, shouldBePressed)
+
+                if (shouldBePressed && btn.bitmaskList.isNotEmpty()) {
+                    checkSecretCheat(btn.bitmaskList[0])
+                }
+            }
+            if (btn.isPressed) {
+                btn.bitmaskList.forEach { bit ->
+                    dpadButtonsMask = dpadButtonsMask or (1 shl bit)
+                }
+            }
+        }
+
+        updateInputKeys(dpadButtonsMask)
+    }
+
+    private fun isDpadButton(id: Int): Boolean {
+        return id == R.id.btn_up || id == R.id.btn_down || id == R.id.btn_left || id == R.id.btn_right ||
+               id == R.id.btn_up_left || id == R.id.btn_up_right || id == R.id.btn_down_left || id == R.id.btn_down_right
+    }
+
+    private fun updateInputKeys(buttonsMask: Int = currentKeys) {
+        val finalKeys = if (isAnalogMode) {
+            (buttonsMask and DPAD_MASK_CLEAR) or analogKeysMask
+        } else {
+            buttonsMask
+        }
+
+        if (currentKeys != finalKeys) {
+            currentKeys = finalKeys
+            gbaView.updateInput(currentKeys)
+        }
+    }
+
+    private val DPAD_MASK_CLEAR = (
+        (1 shl DEVICE_ID_JOYPAD_UP) or
+        (1 shl DEVICE_ID_JOYPAD_DOWN) or
+        (1 shl DEVICE_ID_JOYPAD_LEFT) or
+        (1 shl DEVICE_ID_JOYPAD_RIGHT)
+    ).inv()
+
+    private fun checkSecretCheat(bitmask: Int) {
+        keyHistory.addLast(bitmask)
+
+        while (keyHistory.size > secretCheatCode.size) {
+            keyHistory.removeFirst()
+        }
+
+        if (keyHistory.toList() == secretCheatCode) {
+            toggleDebugHUD()
+            keyHistory.clear()
+        }
+    }
+
+    private fun toggleDebugHUD() {
+        isDebugVisible = !isDebugVisible
+        if (isDebugVisible) {
+            tvDebugHud.visibility = View.VISIBLE
+            Toast.makeText(this, "⚙️ Debug HUD Activated!", Toast.LENGTH_SHORT).show()
+            startDebugLoop()
+        } else {
+            tvDebugHud.visibility = View.GONE
+            stopDebugLoop()
+            Toast.makeText(this, "⚙️ Debug HUD Hidden", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val debugRunnable = object : Runnable {
+        override fun run() {
+            if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
+                try {
+                    val info = GbaEngine.nativeDebugInfo()
+                    tvDebugHud.text = info
+                } catch (e: Exception) {
+                    tvDebugHud.text = "Debug Error: ${e.message}"
+                }
+                debugHandler.postDelayed(this, 200)
+            }
+        }
+    }
+
+    private fun startDebugLoop() {
+        debugHandler.removeCallbacks(debugRunnable)
+        debugHandler.post(debugRunnable)
+    }
+
+    private fun stopDebugLoop() {
+        debugHandler.removeCallbacks(debugRunnable)
+    }
+
+    private fun updateButtonVisuals(view: View, isPressed: Boolean) {
+        // Jangan beri feedback animasi pada hotspot transparan
+        if (isDpadDiagonalHotspot(view.id)) return
+
+        if (isPressed) {
+            view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(50).start()
+            view.alpha = 0.5f
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        } else {
+            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(50).start()
+            view.alpha = 1.0f
+        }
+    }
+
+    private fun isDpadDiagonalHotspot(id: Int): Boolean {
+        return id == R.id.btn_up_left || id == R.id.btn_up_right || id == R.id.btn_down_left || id == R.id.btn_down_right
+    }
+
     private fun setupBackButtonHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 1. Jika dialog aktif -> tutup dialognya saja
                 if (currentDialog != null && currentDialog!!.isShowing) {
                     currentDialog?.dismiss()
                     currentDialog = null
                     return
                 }
 
-                // 2. Jika sedang bermain emulator -> kembali ke Dashboard
                 if (emulatorLayout.visibility == View.VISIBLE) {
                     showIgbaDashboard()
                     return
                 }
 
-                // 3. Jika di Home Dashboard -> Minta tekan 2x untuk Exit App
                 if (backPressedOnce) {
                     finish()
                     return
@@ -470,135 +726,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun registerButton(viewId: Int, bitmask: Int) {
-        val btnView = findViewById<View>(viewId) ?: return
-        registeredButtons.add(ControllerButton(btnView, bitmask))
-    }
-
-    private fun setupController() {
-        registerButton(R.id.btn_up, DEVICE_ID_JOYPAD_UP)
-        registerButton(R.id.btn_down, DEVICE_ID_JOYPAD_DOWN)
-        registerButton(R.id.btn_left, DEVICE_ID_JOYPAD_LEFT)
-        registerButton(R.id.btn_right, DEVICE_ID_JOYPAD_RIGHT)
-        registerButton(R.id.btn_a, DEVICE_ID_JOYPAD_A)
-        registerButton(R.id.btn_b, DEVICE_ID_JOYPAD_B)
-        registerButton(R.id.btn_l, DEVICE_ID_JOYPAD_L)
-        registerButton(R.id.btn_r, DEVICE_ID_JOYPAD_R)
-        registerButton(R.id.btn_start, DEVICE_ID_JOYPAD_START)
-        registerButton(R.id.btn_select, DEVICE_ID_JOYPAD_SELECT)
-    }
-
-    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
-        ev?.let { handleGlobalTouch(it) }
-        return super.dispatchTouchEvent(ev)
-    }
-
-    private fun handleGlobalTouch(event: MotionEvent) {
-        if (emulatorLayout.visibility != View.VISIBLE) return
-
-        val activeMasks = mutableSetOf<Int>()
-        val tempRect = Rect()
-
-        for (pointerIndex in 0 until event.pointerCount) {
-            val action = event.actionMasked
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
-                if (pointerIndex == event.actionIndex) continue
-            }
-            if (action == MotionEvent.ACTION_CANCEL) continue
-
-            val x = event.getX(pointerIndex).toInt()
-            val y = event.getY(pointerIndex).toInt()
-
-            for (btn in registeredButtons) {
-                btn.view.getGlobalVisibleRect(tempRect)
-                if (tempRect.contains(x, y)) {
-                    activeMasks.add(btn.bitmask)
-                }
-            }
-        }
-
-        var newKeys = 0
-        for (btn in registeredButtons) {
-            val shouldBePressed = activeMasks.contains(btn.bitmask)
-            if (btn.isPressed != shouldBePressed) {
-                btn.isPressed = shouldBePressed
-                updateButtonVisuals(btn.view, shouldBePressed)
-
-                if (shouldBePressed) {
-                    checkSecretCheat(btn.bitmask)
-                }
-            }
-            if (btn.isPressed) {
-                newKeys = newKeys or (1 shl btn.bitmask)
-            }
-        }
-
-        if (currentKeys != newKeys) {
-            currentKeys = newKeys
-            gbaView.updateInput(currentKeys)
-        }
-    }
-
-    private fun checkSecretCheat(bitmask: Int) {
-        keyHistory.addLast(bitmask)
-
-        while (keyHistory.size > secretCheatCode.size) {
-            keyHistory.removeFirst()
-        }
-
-        if (keyHistory.toList() == secretCheatCode) {
-            toggleDebugHUD()
-            keyHistory.clear()
-        }
-    }
-
-    private fun toggleDebugHUD() {
-        isDebugVisible = !isDebugVisible
-        if (isDebugVisible) {
-            tvDebugHud.visibility = View.VISIBLE
-            Toast.makeText(this, "⚙️ Debug HUD Activated!", Toast.LENGTH_SHORT).show()
-            startDebugLoop()
-        } else {
-            tvDebugHud.visibility = View.GONE
-            stopDebugLoop()
-            Toast.makeText(this, "⚙️ Debug HUD Hidden", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private val debugRunnable = object : Runnable {
-        override fun run() {
-            if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
-                try {
-                    val info = GbaEngine.nativeDebugInfo()
-                    tvDebugHud.text = info
-                } catch (e: Exception) {
-                    tvDebugHud.text = "Debug Error: ${e.message}"
-                }
-                debugHandler.postDelayed(this, 200)
-            }
-        }
-    }
-
-    private fun startDebugLoop() {
-        debugHandler.removeCallbacks(debugRunnable)
-        debugHandler.post(debugRunnable)
-    }
-
-    private fun stopDebugLoop() {
-        debugHandler.removeCallbacks(debugRunnable)
-    }
-
-    private fun updateButtonVisuals(view: View, isPressed: Boolean) {
-        if (isPressed) {
-            view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(50).start()
-            view.alpha = 0.5f
-            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-        } else {
-            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(50).start()
-            view.alpha = 1.0f
         }
     }
 

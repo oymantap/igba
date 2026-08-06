@@ -68,19 +68,20 @@
         <!-- D-PAD AREA (Bisa di-switch ke Analog) -->
         <FrameLayout
             android:id="@+id/dpad_analog_container"
-            android:layout_width="150dp"
-            android:layout_height="150dp"
+            android:layout_width="160dp"
+            android:layout_height="160dp"
             android:layout_marginStart="20dp"
             android:layout_marginBottom="20dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
-            <!-- D-PAD Standard -->
+            <!-- D-PAD Standard dengan Diagonal Touch Pads -->
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:id="@+id/dpad_container"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
 
+                <!-- Main Directional Buttons -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_up"
                     android:layout_width="48dp"
@@ -132,6 +133,36 @@
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent" />
+
+                <!-- Invisible Diagonal Hotspots -->
+                <View
+                    android:id="@+id/btn_up_left"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <View
+                    android:id="@+id/btn_up_right"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <View
+                    android:id="@+id/btn_down_left"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent" />
+
+                <View
+                    android:id="@+id/btn_down_right"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
             </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- Analog Stick Visual View Mode -->
@@ -151,7 +182,7 @@
             </RelativeLayout>
         </FrameLayout>
 
-        <!-- Tombol Bulat Kecil Toggle Switch D-Pad / Analog -->
+        <!-- Tombol Switch D-Pad / Analog -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_toggle_analog"
             android:layout_width="36dp"
@@ -208,14 +239,13 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
-            <!-- Tombol Percepat / Fast Forward (Tahan seperti PPSSPP) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_fast_forward"
                 android:layout_width="50dp"
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:padding="0dp"
-                android:text="⏩"
+                android:text=">>"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 app:backgroundTint="#55FF9800"
@@ -246,7 +276,7 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- ================= IGBA DASHBOARD HOME SCREEN ================= -->
+    <!-- DASHBOARD HUD & OVERLAY TETAP SAMAA -->
     <RelativeLayout
         android:id="@+id/igba_dashboard_layout"
         android:layout_width="match_parent"
@@ -254,7 +284,6 @@
         android:background="#051329"
         android:visibility="gone">
 
-        <!-- Top Header Status Bar IGBA Style -->
         <RelativeLayout
             android:id="@+id/igba_top_bar"
             android:layout_width="match_parent"
@@ -307,7 +336,6 @@
                     app:strokeColor="#374151"
                     app:strokeWidth="1dp" />
 
-                <!-- Tombol Settings -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_settings"
                     android:layout_width="wrap_content"
@@ -322,7 +350,6 @@
             </LinearLayout>
         </RelativeLayout>
 
-        <!-- Dynamic Game Title & Info Panel -->
         <LinearLayout
             android:id="@+id/game_info_panel"
             android:layout_width="match_parent"
@@ -352,7 +379,6 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Horizontal Game List RecyclerView -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rv_igba_games"
             android:layout_width="match_parent"
@@ -367,7 +393,6 @@
 
     </RelativeLayout>
 
-    <!-- ================= IGBA HEN BOOT SPLASH SCREEN OVERLAY ================= -->
     <RelativeLayout
         android:id="@+id/igba_splash_overlay"
         android:layout_width="match_parent"
@@ -403,7 +428,6 @@
         </LinearLayout>
     </RelativeLayout>
 
-    <!-- ================= DEBUG OVERLAY HUD ================= -->
     <TextView
         android:id="@+id/tv_debug_hud"
         android:layout_width="wrap_content"
