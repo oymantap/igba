@@ -19,7 +19,7 @@ static uint16_t g_input_state = 0;
 static enum retro_pixel_format g_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 
 // Ring Buffer Audio untuk mencegah memory growth & stuttering
-#define AUDIO_RING_BUFFER_SIZE 8192
+#define AUDIO_RING_BUFFER_SIZE 32768
 static int16_t g_audio_ring[AUDIO_RING_BUFFER_SIZE];
 static size_t g_audio_head = 0;
 static size_t g_audio_tail = 0;
