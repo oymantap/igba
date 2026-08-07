@@ -413,227 +413,63 @@ class GbaView @JvmOverloads constructor(
     // AUDIO LOOP
     // ========================================================
 
-    private fun audioLoop() {
+private fun audioLoop() {
 
-        val track =
-            audioTrack
-                ?: return
+    val track =
+        audioTrack ?: return
 
+    if (
+        track.state !=
+        AudioTrack.STATE_INITIALIZED
+    ) {
+        return
+    }
+
+    // ========================================================
+    // START PLAYBACK FIRST
+    // ========================================================
+
+    try {
+
+        track.play()
+
+    } catch (_: Exception) {
+
+        return
+    }
+
+
+    // ========================================================
+    // NORMAL AUDIO LOOP
+    // ========================================================
+
+    while (isRunning) {
 
         if (
             track.state !=
             AudioTrack.STATE_INITIALIZED
         ) {
-
             return
         }
 
 
-        // ====================================================
-        // PREFILL
-        // ====================================================
+        // ----------------------------------------------------
+        // FAST FORWARD
+        // ----------------------------------------------------
 
-        var prefilled =
-            0
-
-
-        while (
-            isRunning &&
-            prefilled < audioPrefillSamples
-        ) {
-
-            if (isFastForward) {
-
-                try {
-
-                    engine.nativeReadAudio(
-                        audioBuffer
-                    )
-
-                    Thread.sleep(2)
-
-                } catch (
-                    _: InterruptedException
-                ) {
-
-                    return
-                }
-
-                continue
-            }
-
+        if (isFastForward) {
 
             try {
 
-                val count =
-                    engine.nativeReadAudio(
-                        prefillBuffer
-                    )
+                /*
+                 * Buang audio yang dihasilkan core
+                 * supaya ring buffer tidak menumpuk.
+                 */
+                engine.nativeReadAudio(
+                    audioBuffer
+                )
 
-
-                if (count > 0) {
-
-                    var offset = 0
-
-
-                    while (
-                        offset < count &&
-                        isRunning
-                    ) {
-
-                        val written =
-                            track.write(
-                                prefillBuffer,
-                                offset,
-                                count - offset,
-                                AudioTrack.WRITE_BLOCKING
-                            )
-
-
-                        if (written <= 0) {
-                            return
-                        }
-
-
-                        offset +=
-                            written
-                    }
-
-
-                    prefilled +=
-                        count
-
-                } else {
-
-                    Thread.sleep(1)
-                }
-
-            } catch (
-                _: InterruptedException
-            ) {
-
-                return
-
-            } catch (_: Exception) {
-
-                return
-            }
-        }
-
-
-        if (!isRunning) {
-            return
-        }
-
-
-        // ====================================================
-        // START PLAYBACK
-        // ====================================================
-
-        try {
-
-            if (
-                track.state ==
-                AudioTrack.STATE_INITIALIZED
-            ) {
-
-                track.play()
-
-            } else {
-
-                return
-            }
-
-        } catch (_: Exception) {
-
-            return
-        }
-
-
-        // ====================================================
-        // NORMAL AUDIO
-        // ====================================================
-
-        while (isRunning) {
-
-            if (
-                track.state !=
-                AudioTrack.STATE_INITIALIZED
-            ) {
-
-                return
-            }
-
-
-            // ------------------------------------------------
-            // FAST FORWARD
-            // ------------------------------------------------
-
-            if (isFastForward) {
-
-                try {
-
-                    engine.nativeReadAudio(
-                        audioBuffer
-                    )
-
-                    Thread.sleep(2)
-
-                } catch (
-                    _: InterruptedException
-                ) {
-
-                    break
-                }
-
-                continue
-            }
-
-
-            // ------------------------------------------------
-            // NORMAL
-            // ------------------------------------------------
-
-            try {
-
-                val count =
-                    engine.nativeReadAudio(
-                        audioBuffer
-                    )
-
-
-                if (count > 0) {
-
-                    var offset = 0
-
-
-                    while (
-                        offset < count &&
-                        isRunning
-                    ) {
-
-                        val written =
-                            track.write(
-                                audioBuffer,
-                                offset,
-                                count - offset,
-                                AudioTrack.WRITE_BLOCKING
-                            )
-
-
-                        if (written <= 0) {
-                            break
-                        }
-
-
-                        offset +=
-                            written
-                    }
-
-                } else {
-
-                    Thread.sleep(1)
-                }
+                Thread.sleep(2)
 
             } catch (
                 _: InterruptedException
@@ -643,12 +479,73 @@ class GbaView @JvmOverloads constructor(
 
             } catch (_: Exception) {
 
-                // AudioTrack dapat berubah state
-                // saat Activity/Surface dihancurkan.
+                break
             }
+
+            continue
+        }
+
+
+        // ----------------------------------------------------
+        // NORMAL AUDIO
+        // ----------------------------------------------------
+
+        try {
+
+            val count =
+                engine.nativeReadAudio(
+                    audioBuffer
+                )
+
+
+            if (count > 0) {
+
+                var offset = 0
+
+                while (
+                    offset < count &&
+                    isRunning
+                ) {
+
+                    val written =
+                        track.write(
+                            audioBuffer,
+                            offset,
+                            count - offset,
+                            AudioTrack.WRITE_BLOCKING
+                        )
+
+
+                    if (written <= 0) {
+                        break
+                    }
+
+
+                    offset += written
+                }
+
+            } else {
+
+                /*
+                 * Ring buffer belum punya audio.
+                 *
+                 * Jangan spin CPU.
+                 */
+                Thread.sleep(1)
+            }
+
+        } catch (
+            _: InterruptedException
+        ) {
+
+            break
+
+        } catch (_: Exception) {
+
+            break
         }
     }
-
+}
 
     // ========================================================
     // SURFACE CREATED
