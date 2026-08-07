@@ -10,12 +10,15 @@ class GbaEngine {
 
     external fun nativeInit()
     external fun nativeLoadRom(romPath: String): Boolean
-    
-    // NATIVE VIDEO & SURFACE MANAGEMENT
+
+    // VIDEO
     external fun nativeSetSurface(surface: Surface?)
     external fun nativeStepFrame()
 
+    // INPUT
     external fun nativeSendInput(keys: Int)
+
+    // AUDIO
     external fun nativeReadAudio(buffer: ShortArray): Int
 
     companion object {

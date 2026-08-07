@@ -12,196 +12,474 @@ class GbaView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : SurfaceView(context, attrs, defStyleAttr), Runnable, SurfaceHolder.Callback {
+) : SurfaceView(context, attrs, defStyleAttr),
+    Runnable,
+    SurfaceHolder.Callback {
 
     private val engine = GbaEngine()
 
     @Volatile
     private var isRunning = false
+
+    @Volatile
     private var isRomLoaded = false
-    private var renderThread: Thread? = null
 
     @Volatile
     private var isFastForward = false
 
-    // COUNTER FRAME UNTUK FPS HUD
+    private var renderThread: Thread? = null
+    private var audioThread: Thread? = null
+
     @Volatile
-    private var frameCount: Long = 0L
+    private var frameCount = 0L
 
     private var audioTrack: AudioTrack? = null
-    private val audioBuffer = ShortArray(4096)
+
+    // Audio buffer reusable.
+    // 4096 samples = 2048 stereo frames.
+    private val audioBuffer =
+        ShortArray(4096)
 
     init {
         holder.addCallback(this)
+
         engine.nativeInit()
+
         initAudio()
     }
+
+
+    // ========================================================
+    // FAST FORWARD
+    // ========================================================
 
     fun setFastForward(enabled: Boolean) {
         isFastForward = enabled
     }
 
-    // Getter untuk dipanggil oleh MainActivity
+
+    // ========================================================
+    // FRAME COUNTER
+    // ========================================================
+
     fun getFrameCount(): Long {
         return frameCount
     }
 
-    private fun initAudio() {
-        val sampleRate = 32000 // GBA System Native Audio Output
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_STEREO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
 
-        val bufferSize = if (minBufferSize > 0) minBufferSize * 8 else 16384
+    // ========================================================
+    // AUDIO INIT
+    // ========================================================
+
+    private fun initAudio() {
+
+        val sampleRate = 32000
+
+        val minBufferSize =
+            AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+        if (minBufferSize <= 0) {
+            return
+        }
+
+        // Jangan 8x terlalu besar.
+        // Sekitar 4x sudah cukup untuk headroom
+        // tanpa membuat latency berlebihan.
+        val bufferSize =
+            minBufferSize * 4
 
         try {
-            audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_GAME)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                        .build()
-                )
-                .setBufferSizeInBytes(bufferSize)
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
+
+            audioTrack =
+                AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(
+                                AudioAttributes.USAGE_GAME
+                            )
+                            .setContentType(
+                                AudioAttributes.CONTENT_TYPE_MUSIC
+                            )
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(
+                                AudioFormat.ENCODING_PCM_16BIT
+                            )
+                            .setSampleRate(
+                                sampleRate
+                            )
+                            .setChannelMask(
+                                AudioFormat.CHANNEL_OUT_STEREO
+                            )
+                            .build()
+                    )
+                    .setBufferSizeInBytes(
+                        bufferSize
+                    )
+                    .setTransferMode(
+                        AudioTrack.MODE_STREAM
+                    )
+                    .build()
+
         } catch (e: Exception) {
+
             e.printStackTrace()
+
+            audioTrack = null
         }
     }
 
+
+    // ========================================================
+    // LOAD ROM
+    // ========================================================
+
     fun loadRom(path: String): Boolean {
-        isRomLoaded = engine.nativeLoadRom(path)
-        if (isRomLoaded && holder.surface.isValid && !isRunning) {
+
+        isRomLoaded =
+            engine.nativeLoadRom(path)
+
+        if (isRomLoaded &&
+            holder.surface.isValid &&
+            !isRunning) {
+
             startLoop()
         }
+
         return isRomLoaded
     }
+
+
+    // ========================================================
+    // INPUT
+    // ========================================================
 
     fun updateInput(keys: Int) {
         engine.nativeSendInput(keys)
     }
 
+
+    // ========================================================
+    // START
+    // ========================================================
+
     @Synchronized
     private fun startLoop() {
-        if (isRunning) return
+
+        if (isRunning) {
+            return
+        }
+
+        if (!holder.surface.isValid) {
+            return
+        }
+
         isRunning = true
+
+        frameCount = 0L
+
         try {
-            if (audioTrack?.state == AudioTrack.STATE_INITIALIZED) {
+
+            if (audioTrack?.state ==
+                AudioTrack.STATE_INITIALIZED) {
+
                 audioTrack?.play()
             }
+
         } catch (e: Exception) {
+
             e.printStackTrace()
         }
-        renderThread = Thread(this, "GbaRenderThread").apply { start() }
+
+
+        // Render thread.
+        renderThread =
+            Thread(
+                this,
+                "GbaRenderThread"
+            ).apply {
+
+                priority =
+                    Thread.NORM_PRIORITY
+
+                start()
+            }
+
+
+        // AUDIO THREAD TERPISAH.
+        audioThread =
+            Thread(
+                { audioLoop() },
+                "GbaAudioThread"
+            ).apply {
+
+                priority =
+                    Thread.NORM_PRIORITY
+
+                start()
+            }
     }
+
+
+    // ========================================================
+    // STOP
+    // ========================================================
 
     fun stopLoop() {
+
         isRunning = false
+
         try {
-            if (audioTrack?.state == AudioTrack.STATE_INITIALIZED &&
-                audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                audioTrack?.stop()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        try {
+
+            renderThread?.interrupt()
+            audioThread?.interrupt()
+
             renderThread?.join(500)
-        } catch (e: InterruptedException) {
-            e.printStackTrace()
+            audioThread?.join(500)
+
+        } catch (_: InterruptedException) {
         }
+
         renderThread = null
+        audioThread = null
+
+        try {
+
+            if (audioTrack?.state ==
+                AudioTrack.STATE_INITIALIZED) {
+
+                audioTrack?.pause()
+                audioTrack?.flush()
+            }
+
+        } catch (_: Exception) {
+        }
     }
 
+
+    // ========================================================
+    // RENDER LOOP
+    // ========================================================
+
     override fun run() {
-        var lastTime = System.nanoTime()
+
+        var lastTime =
+            System.nanoTime()
+
+        val frameDurationNs =
+            1_000_000_000L / 60L
+
 
         while (isRunning) {
-            val targetFps = if (isFastForward) 180.0 else 60.0
-            val nsPerFrame = 1_000_000_000.0 / targetFps
 
-            val now = System.nanoTime()
-            val delta = now - lastTime
+            val now =
+                System.nanoTime()
 
-            if (delta >= nsPerFrame) {
-                if (isRomLoaded) {
-                    // Rendering frame langsung via ANativeWindow di C++
+            val elapsed =
+                now - lastTime
+
+
+            if (elapsed >= frameDurationNs) {
+
+                if (isRomLoaded &&
+                    holder.surface.isValid) {
+
+                    // HANYA emulator + video.
+                    //
+                    // Tidak ada AudioTrack.write()
+                    // di sini lagi.
                     engine.nativeStepFrame()
 
-                    // INCREMENT COUNTER DI SINI!
                     frameCount++
-
-                    // Process Audio
-                    val count = engine.nativeReadAudio(audioBuffer)
-
-                    if (count > 0 && !isFastForward) {
-                        try {
-                            var offset = 0
-                            while (offset < count) {
-                                val written = audioTrack?.write(
-                                    audioBuffer,
-                                    offset,
-                                    count - offset,
-                                    AudioTrack.WRITE_BLOCKING
-                                ) ?: 0
-
-                                if (written <= 0) break
-                                offset += written
-                            }
-                        } catch (_: Exception) {}
-                    }
                 }
+
                 lastTime = now
+
             } else {
-                val sleepNs = (nsPerFrame - delta).toLong()
+
+                val sleepNs =
+                    frameDurationNs - elapsed
+
                 try {
-                    if (sleepNs > 1_000_000L) {
-                        Thread.sleep(sleepNs / 1_000_000L)
+
+                    if (sleepNs >
+                        1_000_000L) {
+
+                        Thread.sleep(
+                            sleepNs /
+                                    1_000_000L
+                        )
+
                     } else {
+
                         Thread.yield()
                     }
+
                 } catch (_: InterruptedException) {
+
                     break
                 }
             }
         }
     }
 
-    // SURFACE LIFECYCLE CALLBACKS
-    override fun surfaceCreated(holder: SurfaceHolder) {
-        engine.nativeSetSurface(holder.surface)
-        if (isRomLoaded && !isRunning) {
+
+    // ========================================================
+    // AUDIO LOOP
+    // ========================================================
+
+    private fun audioLoop() {
+
+        val track =
+            audioTrack ?: return
+
+        while (isRunning) {
+
+            if (isFastForward) {
+
+                // Saat fast-forward,
+                // jangan memenuhi speaker
+                // dengan audio 3x speed.
+                Thread.sleep(5)
+
+                continue
+            }
+
+
+            if (track.state !=
+                AudioTrack.STATE_INITIALIZED) {
+
+                return
+            }
+
+
+            try {
+
+                val count =
+                    engine.nativeReadAudio(
+                        audioBuffer
+                    )
+
+
+                if (count > 0) {
+
+                    var offset = 0
+
+                    while (
+                        offset < count &&
+                        isRunning
+                    ) {
+
+                        val written =
+                            track.write(
+                                audioBuffer,
+                                offset,
+                                count - offset,
+                                AudioTrack.WRITE_BLOCKING
+                            )
+
+                        if (written <= 0) {
+                            break
+                        }
+
+                        offset += written
+                    }
+
+                } else {
+
+                    // Ring buffer kosong.
+                    // Tunggu sebentar agar CPU tidak spin 100%.
+                    Thread.sleep(2)
+                }
+
+            } catch (
+                e: InterruptedException
+            ) {
+
+                break
+
+            } catch (_: Exception) {
+
+                // AudioTrack bisa berubah state
+                // ketika Activity/surface dihancurkan.
+            }
+        }
+    }
+
+
+    // ========================================================
+    // SURFACE CREATED
+    // ========================================================
+
+    override fun surfaceCreated(
+        holder: SurfaceHolder
+    ) {
+
+        engine.nativeSetSurface(
+            holder.surface
+        )
+
+        if (isRomLoaded &&
+            !isRunning) {
+
             startLoop()
         }
     }
 
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        engine.nativeSetSurface(holder.surface)
+
+    // ========================================================
+    // SURFACE CHANGED
+    // ========================================================
+
+    override fun surfaceChanged(
+        holder: SurfaceHolder,
+        format: Int,
+        width: Int,
+        height: Int
+    ) {
+
+        engine.nativeSetSurface(
+            holder.surface
+        )
     }
 
-    override fun surfaceDestroyed(holder: SurfaceHolder) {
+
+    // ========================================================
+    // SURFACE DESTROYED
+    // ========================================================
+
+    override fun surfaceDestroyed(
+        holder: SurfaceHolder
+    ) {
+
         stopLoop()
+
         engine.nativeSetSurface(null)
     }
 
+
+    // ========================================================
+    // DETACHED
+    // ========================================================
+
     override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
+
         stopLoop()
+
         try {
+
             audioTrack?.release()
             audioTrack = null
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+        } catch (_: Exception) {
         }
+
+        super.onDetachedFromWindow()
     }
 }
