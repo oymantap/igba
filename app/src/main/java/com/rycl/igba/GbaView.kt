@@ -24,6 +24,10 @@ class GbaView @JvmOverloads constructor(
     @Volatile
     private var isFastForward = false
 
+    // COUNTER FRAME UNTUK FPS HUD
+    @Volatile
+    private var frameCount: Long = 0L
+
     private var audioTrack: AudioTrack? = null
     private val audioBuffer = ShortArray(4096)
 
@@ -37,10 +41,10 @@ class GbaView @JvmOverloads constructor(
         isFastForward = enabled
     }
 
-// Di dalam class GbaView
-fun getFrameCount(): Long {
-    return frameCount // Variabel frameCount yang di-increment tiap loop render
-}
+    // Getter untuk dipanggil oleh MainActivity
+    fun getFrameCount(): Long {
+        return frameCount
+    }
 
     private fun initAudio() {
         val sampleRate = 32000 // GBA System Native Audio Output
@@ -131,8 +135,11 @@ fun getFrameCount(): Long {
 
             if (delta >= nsPerFrame) {
                 if (isRomLoaded) {
-                    // Renderting frame langsung via ANativeWindow di C++
+                    // Rendering frame langsung via ANativeWindow di C++
                     engine.nativeStepFrame()
+
+                    // INCREMENT COUNTER DI SINI!
+                    frameCount++
 
                     // Process Audio
                     val count = engine.nativeReadAudio(audioBuffer)
