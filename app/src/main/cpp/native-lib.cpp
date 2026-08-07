@@ -10,13 +10,7 @@
 #include <android/native_window_jni.h>
 
 #define LOG_TAG "IGameBoy-JNI"
-
-#define LOGI(...) \
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        LOG_TAG,
-        __VA_ARGS__
-    )
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
 #include "libretro.h"
 
@@ -41,21 +35,6 @@ static std::mutex g_window_mutex;
 // AUDIO
 // ============================================================
 
-/*
- * 131072 samples total.
- *
- * Stereo:
- *
- * L R L R L R...
- *
- * Pada 32 kHz:
- *
- * 131072 / 2 / 32000
- * ≈ 2.048 detik stereo audio.
- *
- * Lebih besar dari sebelumnya untuk memberikan
- * headroom terhadap scheduler Android.
- */
 #define AUDIO_RING_BUFFER_SIZE 131072
 
 static int16_t g_audio_ring[
@@ -85,6 +64,22 @@ static unsigned long long g_frame_count = 0;
 
 
 // ============================================================
+// RESET AUDIO BUFFER
+// ============================================================
+
+static void reset_audio_buffer() {
+
+    std::lock_guard<std::mutex> lock(
+            g_audio_mutex
+    );
+
+    g_audio_head = 0;
+    g_audio_tail = 0;
+    g_audio_count = 0;
+}
+
+
+// ============================================================
 // AUDIO PUSH - SINGLE SAMPLE
 // ============================================================
 
@@ -93,17 +88,12 @@ static void push_audio_sample(
         int16_t right) {
 
     std::lock_guard<std::mutex> lock(
-            g_audio_mutex);
+            g_audio_mutex
+    );
 
-    /*
-     * Pastikan ada ruang untuk L + R.
-     */
     if (g_audio_count + 2 >
         AUDIO_RING_BUFFER_SIZE) {
 
-        /*
-         * Buang satu stereo frame tertua.
-         */
         g_audio_head =
                 (g_audio_head + 2) %
                 AUDIO_RING_BUFFER_SIZE;
@@ -168,8 +158,7 @@ static void video_refresh_callback(
     }
 
     const uint8_t* src =
-            static_cast<const uint8_t*>(
-                    data);
+            static_cast<const uint8_t*>(data);
 
     const unsigned copyWidth =
             std::min(width, 240u);
@@ -191,9 +180,9 @@ static void video_refresh_callback(
 
             const uint16_t* srcRow =
                     reinterpret_cast<
-                        const uint16_t*
+                            const uint16_t*
                     >(
-                        src + y * pitch
+                            src + y * pitch
                     );
 
             uint16_t* dstRow =
@@ -218,8 +207,8 @@ static void video_refresh_callback(
     // --------------------------------------------------------
 
     else if (
-        g_pixel_format ==
-        RETRO_PIXEL_FORMAT_RGB565
+            g_pixel_format ==
+            RETRO_PIXEL_FORMAT_RGB565
     ) {
 
         for (unsigned y = 0;
@@ -228,13 +217,13 @@ static void video_refresh_callback(
 
             memcpy(
                     frame_buffer +
-                        y * 240,
+                            y * 240,
 
                     src +
-                        y * pitch,
+                            y * pitch,
 
                     copyWidth *
-                        sizeof(uint16_t)
+                            sizeof(uint16_t)
             );
         }
     }
@@ -245,8 +234,8 @@ static void video_refresh_callback(
     // --------------------------------------------------------
 
     else if (
-        g_pixel_format ==
-        RETRO_PIXEL_FORMAT_XRGB8888
+            g_pixel_format ==
+            RETRO_PIXEL_FORMAT_XRGB8888
     ) {
 
         for (unsigned y = 0;
@@ -255,9 +244,9 @@ static void video_refresh_callback(
 
             const uint32_t* srcRow =
                     reinterpret_cast<
-                        const uint32_t*
+                            const uint32_t*
                     >(
-                        src + y * pitch
+                            src + y * pitch
                     );
 
             uint16_t* dstRow =
@@ -301,12 +290,12 @@ static int16_t input_state_callback(
         unsigned id) {
 
     if (
-        port == 0 &&
-        device == RETRO_DEVICE_JOYPAD
+            port == 0 &&
+            device == RETRO_DEVICE_JOYPAD
     ) {
 
         return
-            (g_input_state & (1 << id))
+                (g_input_state & (1 << id))
                 ? 1
                 : 0;
     }
@@ -319,7 +308,7 @@ static void input_poll_callback() {}
 
 
 // ============================================================
-// AUDIO CALLBACK
+// AUDIO CALLBACK - SINGLE
 // ============================================================
 
 static void audio_sample_callback(
@@ -334,7 +323,7 @@ static void audio_sample_callback(
 
 
 // ============================================================
-// AUDIO BATCH CALLBACK
+// AUDIO CALLBACK - BATCH
 // ============================================================
 
 static size_t audio_sample_batch_callback(
@@ -353,10 +342,10 @@ static size_t audio_sample_batch_callback(
     );
 
 
-    /*
-     * Kalau batch lebih besar dari seluruh
-     * ring buffer, simpan bagian paling akhir.
-     */
+    // --------------------------------------------------------
+    // Batch terlalu besar
+    // --------------------------------------------------------
+
     if (totalSamples >=
         AUDIO_RING_BUFFER_SIZE) {
 
@@ -368,11 +357,10 @@ static size_t audio_sample_batch_callback(
                 g_audio_ring,
                 data + start,
                 AUDIO_RING_BUFFER_SIZE *
-                    sizeof(int16_t)
+                        sizeof(int16_t)
         );
 
         g_audio_head = 0;
-
         g_audio_tail = 0;
 
         g_audio_count =
@@ -382,18 +370,14 @@ static size_t audio_sample_batch_callback(
     }
 
 
-    /*
-     * Berapa ruang kosong?
-     */
+    // --------------------------------------------------------
+    // Buang audio lama jika penuh
+    // --------------------------------------------------------
+
     const size_t freeSpace =
             AUDIO_RING_BUFFER_SIZE -
             g_audio_count;
 
-
-    /*
-     * Kalau kurang ruang,
-     * buang sample tertua.
-     */
     if (totalSamples > freeSpace) {
 
         const size_t drop =
@@ -401,50 +385,55 @@ static size_t audio_sample_batch_callback(
                 freeSpace;
 
         /*
-         * Pastikan drop tetap genap
-         * karena stereo.
+         * Stereo harus tetap pasangan L/R.
          */
         const size_t stereoDrop =
-                (drop + 1) & ~static_cast<size_t>(1);
+                (drop + 1) &
+                ~static_cast<size_t>(1);
 
         g_audio_head =
                 (g_audio_head +
                  stereoDrop) %
                 AUDIO_RING_BUFFER_SIZE;
 
-        g_audio_count -=
-                std::min(
-                    stereoDrop,
-                    g_audio_count
-                );
+        if (stereoDrop >= g_audio_count) {
+
+            g_audio_count = 0;
+
+        } else {
+
+            g_audio_count -=
+                    stereoDrop;
+        }
     }
 
 
-    /*
-     * Copy sampai ujung ring.
-     */
+    // --------------------------------------------------------
+    // Copy sampai ujung buffer
+    // --------------------------------------------------------
+
     const size_t first =
             std::min(
-                totalSamples,
-                AUDIO_RING_BUFFER_SIZE -
-                    g_audio_tail
+                    totalSamples,
+                    AUDIO_RING_BUFFER_SIZE -
+                            g_audio_tail
             );
 
     memcpy(
             g_audio_ring +
-                g_audio_tail,
+                    g_audio_tail,
 
             data,
 
             first *
-                sizeof(int16_t)
+                    sizeof(int16_t)
     );
 
 
-    /*
-     * Kalau wrap,
-     * lanjut dari index 0.
-     */
+    // --------------------------------------------------------
+    // Wrap
+    // --------------------------------------------------------
+
     if (totalSamples > first) {
 
         memcpy(
@@ -453,7 +442,7 @@ static size_t audio_sample_batch_callback(
                 data + first,
 
                 (totalSamples - first) *
-                    sizeof(int16_t)
+                        sizeof(int16_t)
         );
     }
 
@@ -484,7 +473,7 @@ static bool environment_callback(
 
             auto* fmt =
                     static_cast<
-                        retro_pixel_format*
+                            retro_pixel_format*
                     >(data);
 
             g_pixel_format =
@@ -498,7 +487,7 @@ static bool environment_callback(
 
             bool* canDupe =
                     static_cast<bool*>(
-                        data
+                            data
                     );
 
             *canDupe = true;
@@ -546,6 +535,10 @@ Java_com_rycl_igba_GbaEngine_nativeInit(
     );
 
     retro_init();
+
+    reset_audio_buffer();
+
+    g_frame_count = 0;
 }
 
 
@@ -589,20 +582,12 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
     }
 
 
-    fseek(
-            file,
-            0,
-            SEEK_END
-    );
+    fseek(file, 0, SEEK_END);
 
     const long size =
             ftell(file);
 
-    fseek(
-            file,
-            0,
-            SEEK_SET
-    );
+    fseek(file, 0, SEEK_SET);
 
 
     if (size <= 0) {
@@ -620,9 +605,9 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
     void* buffer =
             malloc(
-                static_cast<size_t>(
-                    size
-                )
+                    static_cast<size_t>(
+                            size
+                    )
             );
 
 
@@ -641,14 +626,13 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
     const size_t read =
             fread(
-                buffer,
-                1,
-                static_cast<size_t>(
-                    size
-                ),
-                file
+                    buffer,
+                    1,
+                    static_cast<size_t>(
+                            size
+                    ),
+                    file
             );
-
 
     fclose(file);
 
@@ -667,6 +651,9 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
     }
 
 
+    reset_audio_buffer();
+
+
     retro_game_info game_info{};
 
     game_info.path =
@@ -677,20 +664,16 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
     game_info.size =
             static_cast<size_t>(
-                size
+                    size
             );
 
 
     const bool loaded =
             retro_load_game(
-                &game_info
+                    &game_info
             );
 
 
-    /*
-     * Ambil sample rate CORE
-     * setelah ROM berhasil diload.
-     */
     if (loaded) {
 
         retro_system_av_info avInfo{};
@@ -701,24 +684,22 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
 
         if (
-            avInfo.timing.sample_rate >
-            0.0
+                avInfo.timing.sample_rate >
+                0.0
         ) {
 
             g_audio_sample_rate =
                     avInfo.timing.sample_rate;
 
-
             LOGI(
-                "Core audio sample rate: %.2f Hz",
-                g_audio_sample_rate
+                    "Core audio sample rate: %.2f Hz",
+                    g_audio_sample_rate
             );
         }
     }
 
 
     free(buffer);
-
 
     env->ReleaseStringUTFChars(
             rom_path,
@@ -727,8 +708,8 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
 
     return loaded
-        ? JNI_TRUE
-        : JNI_FALSE;
+            ? JNI_TRUE
+            : JNI_FALSE;
 }
 
 
@@ -766,8 +747,8 @@ Java_com_rycl_igba_GbaEngine_nativeSetSurface(
 
     g_native_window =
             ANativeWindow_fromSurface(
-                env,
-                surface
+                    env,
+                    surface
             );
 
 
@@ -794,13 +775,14 @@ Java_com_rycl_igba_GbaEngine_nativeStepFrame(
         jobject thiz) {
 
     /*
-     * retro_run() melakukan:
+     * Satu retro_run():
      *
      * CPU
-     * GPU/video callback
+     * video callback
      * audio callback
      * input
      */
+
     retro_run();
 
     g_frame_count++;
@@ -820,11 +802,11 @@ Java_com_rycl_igba_GbaEngine_nativeStepFrame(
 
 
     if (
-        ANativeWindow_lock(
-            g_native_window,
-            &windowBuffer,
-            nullptr
-        ) != 0
+            ANativeWindow_lock(
+                    g_native_window,
+                    &windowBuffer,
+                    nullptr
+            ) != 0
     ) {
 
         return;
@@ -833,30 +815,24 @@ Java_com_rycl_igba_GbaEngine_nativeStepFrame(
 
     uint16_t* dst =
             static_cast<uint16_t*>(
-                windowBuffer.bits
+                    windowBuffer.bits
             );
 
 
-    /*
-     * Copy hanya 240x160.
-     *
-     * Stride Android bisa lebih besar
-     * daripada 240.
-     */
     for (int y = 0;
          y < 160;
          y++) {
 
         memcpy(
                 dst +
-                    y *
-                    windowBuffer.stride,
+                        y *
+                        windowBuffer.stride,
 
                 frame_buffer +
-                    y * 240,
+                        y * 240,
 
                 240 *
-                    sizeof(uint16_t)
+                        sizeof(uint16_t)
         );
     }
 
@@ -880,7 +856,7 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(
 
     g_input_state =
             static_cast<uint16_t>(
-                keys
+                    keys
             );
 }
 
@@ -913,7 +889,7 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
 
     const jsize capacity =
             env->GetArrayLength(
-                buffer
+                    buffer
             );
 
 
@@ -924,17 +900,17 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
 
     const size_t samples =
             std::min(
-                static_cast<size_t>(
-                    capacity
-                ),
-                g_audio_count
+                    static_cast<size_t>(
+                            capacity
+                    ),
+                    g_audio_count
             );
 
 
     jshort* dst =
             env->GetShortArrayElements(
-                buffer,
-                nullptr
+                    buffer,
+                    nullptr
             );
 
 
@@ -943,14 +919,11 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
     }
 
 
-    /*
-     * Bagian pertama sampai ujung ring.
-     */
     const size_t first =
             std::min(
-                samples,
-                AUDIO_RING_BUFFER_SIZE -
-                    g_audio_head
+                    samples,
+                    AUDIO_RING_BUFFER_SIZE -
+                            g_audio_head
             );
 
 
@@ -958,17 +931,13 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
             dst,
 
             g_audio_ring +
-                g_audio_head,
+                    g_audio_head,
 
             first *
-                sizeof(int16_t)
+                    sizeof(int16_t)
     );
 
 
-    /*
-     * Kalau wrap,
-     * lanjut dari awal.
-     */
     if (samples > first) {
 
         memcpy(
@@ -977,7 +946,7 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
                 g_audio_ring,
 
                 (samples - first) *
-                    sizeof(int16_t)
+                        sizeof(int16_t)
         );
     }
 
@@ -993,7 +962,6 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
             (g_audio_head +
              samples) %
             AUDIO_RING_BUFFER_SIZE;
-
 
     g_audio_count -=
             samples;
@@ -1034,7 +1002,6 @@ Java_com_rycl_igba_GbaEngine_nativeDebugInfo(
 
     char buf[768];
 
-
     size_t audioSize;
 
     {
@@ -1048,28 +1015,28 @@ Java_com_rycl_igba_GbaEngine_nativeDebugInfo(
 
 
     snprintf(
-        buf,
-        sizeof(buf),
+            buf,
+            sizeof(buf),
 
-        "=== IGBA DEBUG HUD ===\n"
-        "Frames       : %llu\n"
-        "Pixel Format : %d\n"
-        "Audio Rate   : %.2f Hz\n"
-        "Audio Buffer : %zu samples\n"
-        "Audio Frames : %zu\n"
-        "Input Mask   : 0x%04X",
+            "=== IGBA DEBUG HUD ===\n"
+            "Frames       : %llu\n"
+            "Pixel Format : %d\n"
+            "Audio Rate   : %.2f Hz\n"
+            "Audio Buffer : %zu samples\n"
+            "Audio Frames : %zu\n"
+            "Input Mask   : 0x%04X",
 
-        g_frame_count,
+            g_frame_count,
 
-        g_pixel_format,
+            g_pixel_format,
 
-        g_audio_sample_rate,
+            g_audio_sample_rate,
 
-        audioSize,
+            audioSize,
 
-        audioSize / 2,
+            audioSize / 2,
 
-        g_input_state
+            g_input_state
     );
 
 

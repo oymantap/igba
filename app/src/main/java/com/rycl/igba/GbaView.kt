@@ -12,11 +12,16 @@ class GbaView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : SurfaceView(context, attrs, defStyleAttr),
+) : SurfaceView(
+    context,
+    attrs,
+    defStyleAttr
+),
     Runnable,
     SurfaceHolder.Callback {
 
-    private val engine = GbaEngine()
+    private val engine =
+        GbaEngine()
 
     @Volatile
     private var isRunning = false
@@ -35,57 +40,55 @@ class GbaView @JvmOverloads constructor(
 
     private var audioTrack: AudioTrack? = null
 
-    /*
-     * 4096 samples = 2048 stereo frames.
-     *
-     * Kita gunakan buffer reusable supaya tidak membuat
-     * object baru terus-menerus di audio thread.
-     */
-    private val audioBuffer = ShortArray(4096)
 
-    /*
-     * Audio diprefill sebelum AudioTrack.play().
-     *
-     * 8192 samples stereo = 4096 stereo frames.
-     *
-     * Pada 32 kHz kira-kira 128 ms audio.
-     * Ini sengaja cukup besar untuk menghindari startup underrun.
-     */
-    private val prefillBuffer = ShortArray(8192)
+    // ========================================================
+    // AUDIO BUFFER
+    // ========================================================
 
-    /*
-     * Target minimum audio yang harus terkumpul sebelum
-     * AudioTrack mulai dimainkan.
-     */
-    private val audioPrefillSamples = 8192
+    private val audioBuffer =
+        ShortArray(4096)
+
+    private val prefillBuffer =
+        ShortArray(8192)
+
+    private val audioPrefillSamples =
+        8192
+
+
+    // ========================================================
+    // INIT
+    // ========================================================
 
     init {
+
         holder.addCallback(this)
 
         engine.nativeInit()
-
-        /*
-         * JANGAN initAudio() di sini.
-         *
-         * Sample rate core baru diketahui setelah ROM diload.
-         */
     }
+
 
     // ========================================================
     // FAST FORWARD
     // ========================================================
 
-    fun setFastForward(enabled: Boolean) {
-        isFastForward = enabled
+    fun setFastForward(
+        enabled: Boolean
+    ) {
+
+        isFastForward =
+            enabled
     }
+
 
     // ========================================================
     // FRAME COUNTER
     // ========================================================
 
     fun getFrameCount(): Long {
+
         return frameCount
     }
+
 
     // ========================================================
     // AUDIO INIT
@@ -93,16 +96,13 @@ class GbaView @JvmOverloads constructor(
 
     private fun initAudio() {
 
-        /*
-         * nativeLoadRom() sudah dipanggil sebelumnya,
-         * jadi sekarang sample rate sudah berasal dari core.
-         */
         val sampleRate =
             engine.nativeGetAudioSampleRate()
 
         if (sampleRate <= 0) {
             return
         }
+
 
         val minBufferSize =
             AudioTrack.getMinBufferSize(
@@ -111,23 +111,21 @@ class GbaView @JvmOverloads constructor(
                 AudioFormat.ENCODING_PCM_16BIT
             )
 
+
         if (minBufferSize <= 0) {
             return
         }
 
-        /*
-         * Jangan terlalu kecil.
-         *
-         * 4x minimum memberi headroom terhadap scheduler
-         * Android tanpa membuat latency terlalu ekstrem.
-         */
+
         val bufferSize =
             minBufferSize * 4
+
 
         try {
 
             audioTrack =
                 AudioTrack.Builder()
+
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(
@@ -138,6 +136,7 @@ class GbaView @JvmOverloads constructor(
                             )
                             .build()
                     )
+
                     .setAudioFormat(
                         AudioFormat.Builder()
                             .setEncoding(
@@ -151,12 +150,15 @@ class GbaView @JvmOverloads constructor(
                             )
                             .build()
                     )
+
                     .setBufferSizeInBytes(
                         bufferSize
                     )
+
                     .setTransferMode(
                         AudioTrack.MODE_STREAM
                     )
+
                     .build()
 
         } catch (e: Exception) {
@@ -167,49 +169,66 @@ class GbaView @JvmOverloads constructor(
         }
     }
 
+
     // ========================================================
     // LOAD ROM
     // ========================================================
 
-    fun loadRom(path: String): Boolean {
+    fun loadRom(
+        path: String
+    ): Boolean {
 
-        /*
-         * Load ROM dahulu.
-         *
-         * nativeLoadRom() akan mendapatkan sample rate
-         * asli dari retro_system_av_info.
-         */
         val loaded =
             engine.nativeLoadRom(path)
 
-        isRomLoaded = loaded
+        isRomLoaded =
+            loaded
+
 
         if (!loaded) {
             return false
         }
 
+
         /*
-         * AudioTrack dibuat SETELAH core mengetahui sample rate.
+         * ROM sudah diload.
+         * Sekarang sample rate core sudah diketahui.
          */
-        audioTrack?.release()
+
+        try {
+            audioTrack?.release()
+        } catch (_: Exception) {
+        }
+
         audioTrack = null
 
         initAudio()
 
-        if (holder.surface.isValid && !isRunning) {
+
+        if (
+            holder.surface.isValid &&
+            !isRunning
+        ) {
+
             startLoop()
         }
 
+
         return true
     }
+
 
     // ========================================================
     // INPUT
     // ========================================================
 
-    fun updateInput(keys: Int) {
+    fun updateInput(
+        keys: Int
+    ) {
+
         engine.nativeSendInput(keys)
     }
+
 
     // ========================================================
     // START
@@ -222,31 +241,22 @@ class GbaView @JvmOverloads constructor(
             return
         }
 
+
         if (!holder.surface.isValid) {
             return
         }
+
 
         if (!isRomLoaded) {
             return
         }
 
+
         isRunning = true
 
         frameCount = 0L
 
-        /*
-         * AudioTrack JANGAN play() di sini.
-         *
-         * Audio thread akan:
-         *
-         * retro_run()
-         *      ↓
-         * ring buffer terisi
-         *      ↓
-         * prefill
-         *      ↓
-         * AudioTrack.play()
-         */
+
         renderThread =
             Thread(
                 this,
@@ -259,9 +269,12 @@ class GbaView @JvmOverloads constructor(
                 start()
             }
 
+
         audioThread =
             Thread(
-                { audioLoop() },
+                {
+                    audioLoop()
+                },
                 "GbaAudioThread"
             ).apply {
 
@@ -272,6 +285,7 @@ class GbaView @JvmOverloads constructor(
             }
     }
 
+
     // ========================================================
     // STOP
     // ========================================================
@@ -280,28 +294,36 @@ class GbaView @JvmOverloads constructor(
 
         isRunning = false
 
+
         try {
 
             renderThread?.interrupt()
+
             audioThread?.interrupt()
 
             renderThread?.join(500)
+
             audioThread?.join(500)
 
         } catch (_: InterruptedException) {
         }
 
+
         renderThread = null
+
         audioThread = null
+
 
         try {
 
             audioTrack?.pause()
+
             audioTrack?.flush()
 
         } catch (_: Exception) {
         }
     }
+
 
     // ========================================================
     // RENDER LOOP
@@ -312,45 +334,42 @@ class GbaView @JvmOverloads constructor(
         var nextFrameTime =
             System.nanoTime()
 
+        val frameDuration =
+            1_000_000_000L / 60L
+
+
         while (isRunning) {
 
             val now =
                 System.nanoTime()
 
+
             if (now >= nextFrameTime) {
 
-                if (isRomLoaded &&
-                    holder.surface.isValid) {
+                if (
+                    isRomLoaded &&
+                    holder.surface.isValid
+                ) {
 
-                    /*
-                     * Satu retro_run().
-                     *
-                     * Video:
-                     *   callback → frame_buffer
-                     *
-                     * Audio:
-                     *   callback → audio ring buffer
-                     */
                     engine.nativeStepFrame()
 
                     frameCount++
                 }
 
-                /*
-                 * Jadwalkan frame berikutnya berdasarkan
-                 * timeline, bukan sekadar now + frame duration.
-                 *
-                 * Ini mengurangi drift frame.
-                 */
+
                 nextFrameTime +=
-                    1_000_000_000L / 60L
+                    frameDuration
+
 
                 /*
-                 * Kalau thread tertinggal sangat jauh,
-                 * jangan mencoba mengejar puluhan frame sekaligus.
+                 * Jangan mencoba mengejar frame
+                 * terlalu jauh setelah stall.
                  */
-                if (now - nextFrameTime >
-                    100_000_000L) {
+
+                if (
+                    now - nextFrameTime >
+                    100_000_000L
+                ) {
 
                     nextFrameTime =
                         now
@@ -361,10 +380,13 @@ class GbaView @JvmOverloads constructor(
                 val sleepNs =
                     nextFrameTime - now
 
+
                 try {
 
-                    if (sleepNs >
-                        2_000_000L) {
+                    if (
+                        sleepNs >
+                        2_000_000L
+                    ) {
 
                         Thread.sleep(
                             sleepNs /
@@ -386,6 +408,7 @@ class GbaView @JvmOverloads constructor(
         }
     }
 
+
     // ========================================================
     // AUDIO LOOP
     // ========================================================
@@ -393,26 +416,26 @@ class GbaView @JvmOverloads constructor(
     private fun audioLoop() {
 
         val track =
-            audioTrack ?: return
+            audioTrack
+                ?: return
 
-        if (track.state !=
-            AudioTrack.STATE_INITIALIZED) {
+
+        if (
+            track.state !=
+            AudioTrack.STATE_INITIALIZED
+        ) {
 
             return
         }
 
-        /*
-         * ====================================================
-         * PHASE 1: PREFILL
-         * ====================================================
-         *
-         * Jangan langsung play().
-         *
-         * Kita tunggu sampai emulator menghasilkan
-         * sejumlah audio yang cukup.
-         */
+
+        // ====================================================
+        // PREFILL
+        // ====================================================
+
         var prefilled =
             0
+
 
         while (
             isRunning &&
@@ -421,18 +444,24 @@ class GbaView @JvmOverloads constructor(
 
             if (isFastForward) {
 
-                /*
-                 * Saat fast-forward audio tidak dimainkan.
-                 * Buang data supaya ring buffer tidak penuh.
-                 */
-                engine.nativeReadAudio(
-                    audioBuffer
-                )
+                try {
 
-                Thread.sleep(2)
+                    engine.nativeReadAudio(
+                        audioBuffer
+                    )
+
+                    Thread.sleep(2)
+
+                } catch (
+                    _: InterruptedException
+                ) {
+
+                    return
+                }
 
                 continue
             }
+
 
             try {
 
@@ -441,14 +470,11 @@ class GbaView @JvmOverloads constructor(
                         prefillBuffer
                     )
 
+
                 if (count > 0) {
 
-                    /*
-                     * Simpan sementara ke AudioTrack.
-                     *
-                     * Kita belum memanggil play().
-                     */
                     var offset = 0
+
 
                     while (
                         offset < count &&
@@ -463,20 +489,22 @@ class GbaView @JvmOverloads constructor(
                                 AudioTrack.WRITE_BLOCKING
                             )
 
+
                         if (written <= 0) {
                             return
                         }
 
-                        offset += written
+
+                        offset +=
+                            written
                     }
 
-                    prefilled += count
+
+                    prefilled +=
+                        count
 
                 } else {
 
-                    /*
-                     * Emulator belum menghasilkan cukup audio.
-                     */
                     Thread.sleep(1)
                 }
 
@@ -492,21 +520,22 @@ class GbaView @JvmOverloads constructor(
             }
         }
 
+
         if (!isRunning) {
             return
         }
 
-        /*
-         * ====================================================
-         * PHASE 2: START PLAYBACK
-         * ====================================================
-         *
-         * Sekarang AudioTrack sudah diprime.
-         */
+
+        // ====================================================
+        // START PLAYBACK
+        // ====================================================
+
         try {
 
-            if (track.state ==
-                AudioTrack.STATE_INITIALIZED) {
+            if (
+                track.state ==
+                AudioTrack.STATE_INITIALIZED
+            ) {
 
                 track.play()
 
@@ -520,26 +549,26 @@ class GbaView @JvmOverloads constructor(
             return
         }
 
-        /*
-         * ====================================================
-         * PHASE 3: NORMAL AUDIO
-         * ====================================================
-         */
+
+        // ====================================================
+        // NORMAL AUDIO
+        // ====================================================
 
         while (isRunning) {
 
-            if (track.state !=
-                AudioTrack.STATE_INITIALIZED) {
+            if (
+                track.state !=
+                AudioTrack.STATE_INITIALIZED
+            ) {
 
                 return
             }
 
-            /*
-             * Fast-forward:
-             *
-             * jangan kirim audio 3x speed ke speaker.
-             * Cukup drain ring buffer.
-             */
+
+            // ------------------------------------------------
+            // FAST FORWARD
+            // ------------------------------------------------
+
             if (isFastForward) {
 
                 try {
@@ -560,6 +589,11 @@ class GbaView @JvmOverloads constructor(
                 continue
             }
 
+
+            // ------------------------------------------------
+            // NORMAL
+            // ------------------------------------------------
+
             try {
 
                 val count =
@@ -567,9 +601,11 @@ class GbaView @JvmOverloads constructor(
                         audioBuffer
                     )
 
+
                 if (count > 0) {
 
                     var offset = 0
+
 
                     while (
                         offset < count &&
@@ -584,20 +620,18 @@ class GbaView @JvmOverloads constructor(
                                 AudioTrack.WRITE_BLOCKING
                             )
 
+
                         if (written <= 0) {
                             break
                         }
 
-                        offset += written
+
+                        offset +=
+                            written
                     }
 
                 } else {
 
-                    /*
-                     * Tidak ada audio saat ini.
-                     *
-                     * Jangan spin 100% CPU.
-                     */
                     Thread.sleep(1)
                 }
 
@@ -609,13 +643,12 @@ class GbaView @JvmOverloads constructor(
 
             } catch (_: Exception) {
 
-                /*
-                 * AudioTrack dapat berubah state ketika
-                 * Surface/Activity dihancurkan.
-                 */
+                // AudioTrack dapat berubah state
+                // saat Activity/Surface dihancurkan.
             }
         }
     }
+
 
     // ========================================================
     // SURFACE CREATED
@@ -629,12 +662,16 @@ class GbaView @JvmOverloads constructor(
             holder.surface
         )
 
-        if (isRomLoaded &&
-            !isRunning) {
+
+        if (
+            isRomLoaded &&
+            !isRunning
+        ) {
 
             startLoop()
         }
     }
+
 
     // ========================================================
     // SURFACE CHANGED
@@ -652,6 +689,7 @@ class GbaView @JvmOverloads constructor(
         )
     }
 
+
     // ========================================================
     // SURFACE DESTROYED
     // ========================================================
@@ -665,6 +703,7 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSetSurface(null)
     }
 
+
     // ========================================================
     // DETACHED
     // ========================================================
@@ -673,13 +712,16 @@ class GbaView @JvmOverloads constructor(
 
         stopLoop()
 
+
         try {
 
             audioTrack?.release()
+
             audioTrack = null
 
         } catch (_: Exception) {
         }
+
 
         super.onDetachedFromWindow()
     }
