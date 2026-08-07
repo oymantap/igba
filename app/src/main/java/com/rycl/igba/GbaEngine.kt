@@ -1,6 +1,6 @@
 package com.rycl.igba
 
-import android.graphics.Bitmap
+import android.view.Surface
 
 class GbaEngine {
 
@@ -10,10 +10,12 @@ class GbaEngine {
 
     external fun nativeInit()
     external fun nativeLoadRom(romPath: String): Boolean
-    external fun nativeStepFrame(bitmap: Bitmap)
-    external fun nativeSendInput(keys: Int)
+    
+    // NATIVE VIDEO & SURFACE MANAGEMENT
+    external fun nativeSetSurface(surface: Surface?)
+    external fun nativeStepFrame()
 
-    // BARU
+    external fun nativeSendInput(keys: Int)
     external fun nativeReadAudio(buffer: ShortArray): Int
 
     companion object {

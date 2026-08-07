@@ -1,27 +1,20 @@
 package com.rycl.igba
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Rect
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.util.AttributeSet
-import android.view.View
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 
 class GbaView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : View(context, attrs, defStyleAttr), Runnable {
+) : SurfaceView(context, attrs, defStyleAttr), Runnable, SurfaceHolder.Callback {
 
     private val engine = GbaEngine()
-    private val bitmap: Bitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
-    private val paint: Paint = Paint().apply {
-        isFilterBitmap = false
-    }
 
     @Volatile
     private var isRunning = false
@@ -31,15 +24,11 @@ class GbaView @JvmOverloads constructor(
     @Volatile
     private var isFastForward = false
 
-    private val srcRect = Rect(0, 0, 240, 160)
-    private val dstRect = Rect()
-
     private var audioTrack: AudioTrack? = null
-
-    // Reuse buffer biar ga kena Garbage Collector stuttering
     private val audioBuffer = ShortArray(4096)
 
     init {
+        holder.addCallback(this)
         engine.nativeInit()
         initAudio()
     }
@@ -48,15 +37,19 @@ class GbaView @JvmOverloads constructor(
         isFastForward = enabled
     }
 
+// Di dalam class GbaView
+fun getFrameCount(): Long {
+    return frameCount // Variabel frameCount yang di-increment tiap loop render
+}
+
     private fun initAudio() {
-        val sampleRate = 32000 // 32000 Hz (GBA Native)
+        val sampleRate = 32000 // GBA System Native Audio Output
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        // Buffer Headroom 8x untuk mencegah audio underrun/stutter
         val bufferSize = if (minBufferSize > 0) minBufferSize * 8 else 16384
 
         try {
@@ -84,7 +77,7 @@ class GbaView @JvmOverloads constructor(
 
     fun loadRom(path: String): Boolean {
         isRomLoaded = engine.nativeLoadRom(path)
-        if (isRomLoaded && !isRunning) {
+        if (isRomLoaded && holder.surface.isValid && !isRunning) {
             startLoop()
         }
         return isRomLoaded
@@ -128,10 +121,8 @@ class GbaView @JvmOverloads constructor(
 
     override fun run() {
         var lastTime = System.nanoTime()
-        var frameSkipCounter = 0
 
         while (isRunning) {
-            // Fast Forward -> Target 180 FPS (3x Speed), Normal -> 60 FPS
             val targetFps = if (isFastForward) 180.0 else 60.0
             val nsPerFrame = 1_000_000_000.0 / targetFps
 
@@ -140,18 +131,10 @@ class GbaView @JvmOverloads constructor(
 
             if (delta >= nsPerFrame) {
                 if (isRomLoaded) {
-                    // Step emulasi frame
-                    engine.nativeStepFrame(bitmap)
+                    // Renderting frame langsung via ANativeWindow di C++
+                    engine.nativeStepFrame()
 
-                    // Skip canvas rendering jika telat berat
-                    if (delta > nsPerFrame * 1.5 && frameSkipCounter < 2) {
-                        frameSkipCounter++
-                    } else {
-                        frameSkipCounter = 0
-                        postInvalidateOnAnimation()
-                    }
-
-                    // --- BACA AUDIO DARI JNI ---
+                    // Process Audio
                     val count = engine.nativeReadAudio(audioBuffer)
 
                     if (count > 0 && !isFastForward) {
@@ -173,8 +156,13 @@ class GbaView @JvmOverloads constructor(
                 }
                 lastTime = now
             } else {
+                val sleepNs = (nsPerFrame - delta).toLong()
                 try {
-                    Thread.sleep(1)
+                    if (sleepNs > 1_000_000L) {
+                        Thread.sleep(sleepNs / 1_000_000L)
+                    } else {
+                        Thread.yield()
+                    }
                 } catch (_: InterruptedException) {
                     break
                 }
@@ -182,16 +170,21 @@ class GbaView @JvmOverloads constructor(
         }
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        dstRect.set(0, 0, w, h)
+    // SURFACE LIFECYCLE CALLBACKS
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        engine.nativeSetSurface(holder.surface)
+        if (isRomLoaded && !isRunning) {
+            startLoop()
+        }
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        if (isRomLoaded) {
-            canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
-        }
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        engine.nativeSetSurface(holder.surface)
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        stopLoop()
+        engine.nativeSetSurface(null)
     }
 
     override fun onDetachedFromWindow() {

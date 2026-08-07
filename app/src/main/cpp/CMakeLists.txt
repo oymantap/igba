@@ -42,11 +42,12 @@ target_include_directories(igameboy PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# FIND LIBRARIES
 find_library(log-lib log)
-find_library(jnigraphics-lib jnigraphics)
+find_library(android-lib android) # <-- PENTING: Untuk ANativeWindow
 
 target_link_libraries(
     igameboy
     ${log-lib}
-    ${jnigraphics-lib}
+    ${android-lib} # <-- PENTING: Didaftarin di sini
 )

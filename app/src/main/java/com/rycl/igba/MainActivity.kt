@@ -65,10 +65,15 @@ class MainActivity : AppCompatActivity() {
     private var backPressedOnce = false
     private var currentDialog: AlertDialog? = null
 
-    // DEBUG HUD
-    private lateinit var tvDebugHud: TextView
-    private val debugHandler = Handler(Looper.getMainLooper())
-    private var isDebugVisible = false
+ // DEBUG HUD & FPS TRACKER
+private lateinit var tvDebugHud: TextView
+private val debugHandler = Handler(Looper.getMainLooper())
+private var isDebugVisible = false
+
+// Variabel hitung FPS
+private var lastFrameCount = 0L
+private var lastFpsTimestamp = System.currentTimeMillis()
+private var currentFps = 0.0
 
     private val secretCheatCode = listOf(
         DEVICE_ID_JOYPAD_UP, DEVICE_ID_JOYPAD_DOWN,
@@ -438,18 +443,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val debugRunnable = object : Runnable {
-        override fun run() {
-            if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
-                try {
-                    val info = GbaEngine.nativeDebugInfo()
-                    tvDebugHud.text = info
-                } catch (e: Exception) {
-                    tvDebugHud.text = "Debug Error: ${e.message}"
+    override fun run() {
+        if (isDebugVisible && emulatorLayout.visibility == View.VISIBLE) {
+            try {
+                // 1. Ambil data debug bawaan dari NDK
+                val nativeInfo = GbaEngine.nativeDebugInfo()
+
+                // 2. Kalkulasi FPS berdasarkan delta frame di GbaView
+                val currentTime = System.currentTimeMillis()
+                val deltaTime = (currentTime - lastFpsTimestamp) / 1000.0
+
+                if (deltaTime >= 0.5) { // Update kalkulasi FPS tiap 0.5 detik
+                    val currentFrames = gbaView.getFrameCount() // Mengambil total frame dari View
+                    val frameDelta = currentFrames - lastFrameCount
+                    
+                    currentFps = if (deltaTime > 0) frameDelta / deltaTime else 0.0
+
+                    lastFrameCount = currentFrames
+                    lastFpsTimestamp = currentTime
                 }
-                debugHandler.postDelayed(this, 200)
+
+                // 3. Tampilkan ke Overlay HUD
+                val fpsFormatted = String.format("%.1f", currentFps)
+                tvDebugHud.text = "⚡ FPS: $fpsFormatted\n$nativeInfo"
+
+            } catch (e: Exception) {
+                tvDebugHud.text = "Debug Error: ${e.message}"
             }
+            debugHandler.postDelayed(this, 200) // Refresh UI tiap 200ms
         }
     }
+}
 
     private fun startDebugLoop() {
         debugHandler.removeCallbacks(debugRunnable)
@@ -729,9 +753,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPause() {
+        override fun onPause() {
         super.onPause()
         stopDebugLoop()
+        gbaView.stopLoop() // ✅ TAMBAHKAN INI biar thread C++ gak bocor di background
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

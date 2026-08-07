@@ -6,8 +6,9 @@
 #include <vector>
 #include <mutex>
 #include <algorithm>
-#include <android/bitmap.h>
 #include <android/log.h>
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
 
 #define LOG_TAG "IGameBoy-JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -18,7 +19,11 @@ static uint16_t frame_buffer[240 * 160];
 static uint16_t g_input_state = 0;
 static enum retro_pixel_format g_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 
-// Ring Buffer Audio untuk mencegah memory growth & stuttering
+// Native Window Handling
+static ANativeWindow* g_native_window = nullptr;
+static std::mutex g_window_mutex;
+
+// Ring Buffer Audio
 #define AUDIO_RING_BUFFER_SIZE 65536
 static int16_t g_audio_ring[AUDIO_RING_BUFFER_SIZE];
 static size_t g_audio_head = 0;
@@ -26,13 +31,12 @@ static size_t g_audio_tail = 0;
 static size_t g_audio_count = 0;
 static std::mutex g_audio_mutex;
 
-// Debug HUD Stats
+// Debug Stats
 static unsigned long long g_frame_count = 0;
 
 static void push_audio_sample(int16_t left, int16_t right) {
     std::lock_guard<std::mutex> lock(g_audio_mutex);
     if (g_audio_count + 2 > AUDIO_RING_BUFFER_SIZE) {
-        // Buffer Penuh! Drop data tertua agar tidak kresek/lag
         g_audio_head = (g_audio_head + 2) % AUDIO_RING_BUFFER_SIZE;
         g_audio_count -= 2;
     }
@@ -131,6 +135,24 @@ Java_com_rycl_igba_GbaEngine_nativeInit(JNIEnv *env, jobject thiz) {
     retro_init();
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_rycl_igba_GbaEngine_nativeSetSurface(JNIEnv *env, jobject thiz, jobject surface) {
+    std::lock_guard<std::mutex> lock(g_window_mutex);
+
+    if (g_native_window) {
+        ANativeWindow_release(g_native_window);
+        g_native_window = nullptr;
+    }
+
+    if (surface) {
+        g_native_window = ANativeWindow_fromSurface(env, surface);
+        if (g_native_window) {
+            // Force buffer size native GBA (240x160) format RGB565 (565_RGB)
+            ANativeWindow_setBuffersGeometry(g_native_window, 240, 160, WINDOW_FORMAT_RGB_565);
+        }
+    }
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring rom_path) {
     if (!rom_path) return JNI_FALSE;
@@ -176,17 +198,22 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(JNIEnv *env, jobject thiz, jstring ro
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_rycl_igba_GbaEngine_nativeStepFrame(JNIEnv *env, jobject thiz, jobject bitmap) {
+Java_com_rycl_igba_GbaEngine_nativeStepFrame(JNIEnv *env, jobject thiz) {
     retro_run();
     g_frame_count++;
 
-    if (bitmap) {
-        void *pixels = nullptr;
-        if (AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS) {
-            if (pixels) {
-                memcpy(pixels, frame_buffer, 240 * 160 * sizeof(uint16_t));
+    std::lock_guard<std::mutex> lock(g_window_mutex);
+    if (g_native_window) {
+        ANativeWindow_Buffer window_buffer;
+        if (ANativeWindow_lock(g_native_window, &window_buffer, nullptr) == 0) {
+            uint16_t *dst_pixels = (uint16_t *)window_buffer.bits;
+            
+            // Render per row memperhitungkan stride/pitch dari ANativeWindow
+            for (int y = 0; y < 160; y++) {
+                memcpy(dst_pixels + (y * window_buffer.stride), frame_buffer + (y * 240), 240 * sizeof(uint16_t));
             }
-            AndroidBitmap_unlockPixels(env, bitmap);
+
+            ANativeWindow_unlockAndPost(g_native_window);
         }
     }
 }
@@ -196,51 +223,34 @@ Java_com_rycl_igba_GbaEngine_nativeSendInput(JNIEnv *env, jobject thiz, jint key
     g_input_state = (uint16_t)keys;
 }
 
-extern "C"
-JNIEXPORT jint JNICALL
-Java_com_rycl_igba_GbaEngine_nativeReadAudio(
-        JNIEnv *env,
-        jobject,
-        jshortArray buffer) {
-
-    if (!buffer)
-        return 0;
+extern "C" JNIEXPORT jint JNICALL
+Java_com_rycl_igba_GbaEngine_nativeReadAudio(JNIEnv *env, jobject thiz, jshortArray buffer) {
+    if (!buffer) return 0;
 
     std::lock_guard<std::mutex> lock(g_audio_mutex);
-
-    if (g_audio_count == 0)
-        return 0;
+    if (g_audio_count == 0) return 0;
 
     jsize capacity = env->GetArrayLength(buffer);
-
-    size_t samples = std::min(
-            (size_t)capacity,
-            g_audio_count);
+    size_t samples = std::min((size_t)capacity, g_audio_count);
 
     jshort* dst = env->GetShortArrayElements(buffer, nullptr);
 
-    for (size_t i = 0; i < samples; i++) {
-        dst[i] =
-                g_audio_ring[
-                        (g_audio_head + i)
-                        % AUDIO_RING_BUFFER_SIZE];
+    size_t first = std::min(samples, AUDIO_RING_BUFFER_SIZE - g_audio_head);
+
+    memcpy(dst, &g_audio_ring[g_audio_head], first * sizeof(int16_t));
+
+    if (samples > first) {
+        memcpy(dst + first, g_audio_ring, (samples - first) * sizeof(int16_t));
     }
 
-    env->ReleaseShortArrayElements(
-            buffer,
-            dst,
-            0);
+    env->ReleaseShortArrayElements(buffer, dst, 0);
 
-    g_audio_head =
-            (g_audio_head + samples)
-            % AUDIO_RING_BUFFER_SIZE;
-
+    g_audio_head = (g_audio_head + samples) % AUDIO_RING_BUFFER_SIZE;
     g_audio_count -= samples;
 
     return (jint)samples;
 }
 
-// ================= FITUR DEBUG HUD OVERLAY =================
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_rycl_igba_GbaEngine_nativeDebugInfo(JNIEnv *env, jobject thiz) {
     char buf[512];
