@@ -35,19 +35,41 @@ class GbaView @JvmOverloads constructor(
 
     private var audioTrack: AudioTrack? = null
 
-    // Audio buffer reusable.
-    // 4096 samples = 2048 stereo frames.
-    private val audioBuffer =
-        ShortArray(4096)
+    /*
+     * 4096 samples = 2048 stereo frames.
+     *
+     * Kita gunakan buffer reusable supaya tidak membuat
+     * object baru terus-menerus di audio thread.
+     */
+    private val audioBuffer = ShortArray(4096)
+
+    /*
+     * Audio diprefill sebelum AudioTrack.play().
+     *
+     * 8192 samples stereo = 4096 stereo frames.
+     *
+     * Pada 32 kHz kira-kira 128 ms audio.
+     * Ini sengaja cukup besar untuk menghindari startup underrun.
+     */
+    private val prefillBuffer = ShortArray(8192)
+
+    /*
+     * Target minimum audio yang harus terkumpul sebelum
+     * AudioTrack mulai dimainkan.
+     */
+    private val audioPrefillSamples = 8192
 
     init {
         holder.addCallback(this)
 
         engine.nativeInit()
 
-        initAudio()
+        /*
+         * JANGAN initAudio() di sini.
+         *
+         * Sample rate core baru diketahui setelah ROM diload.
+         */
     }
-
 
     // ========================================================
     // FAST FORWARD
@@ -57,7 +79,6 @@ class GbaView @JvmOverloads constructor(
         isFastForward = enabled
     }
 
-
     // ========================================================
     // FRAME COUNTER
     // ========================================================
@@ -66,15 +87,22 @@ class GbaView @JvmOverloads constructor(
         return frameCount
     }
 
-
     // ========================================================
     // AUDIO INIT
     // ========================================================
 
     private fun initAudio() {
 
+        /*
+         * nativeLoadRom() sudah dipanggil sebelumnya,
+         * jadi sekarang sample rate sudah berasal dari core.
+         */
         val sampleRate =
-              engine.nativeGetAudioSampleRate()
+            engine.nativeGetAudioSampleRate()
+
+        if (sampleRate <= 0) {
+            return
+        }
 
         val minBufferSize =
             AudioTrack.getMinBufferSize(
@@ -87,9 +115,12 @@ class GbaView @JvmOverloads constructor(
             return
         }
 
-        // Jangan 8x terlalu besar.
-        // Sekitar 4x sudah cukup untuk headroom
-        // tanpa membuat latency berlebihan.
+        /*
+         * Jangan terlalu kecil.
+         *
+         * 4x minimum memberi headroom terhadap scheduler
+         * Android tanpa membuat latency terlalu ekstrem.
+         */
         val bufferSize =
             minBufferSize * 4
 
@@ -136,26 +167,41 @@ class GbaView @JvmOverloads constructor(
         }
     }
 
-
     // ========================================================
     // LOAD ROM
     // ========================================================
 
     fun loadRom(path: String): Boolean {
 
-        isRomLoaded =
+        /*
+         * Load ROM dahulu.
+         *
+         * nativeLoadRom() akan mendapatkan sample rate
+         * asli dari retro_system_av_info.
+         */
+        val loaded =
             engine.nativeLoadRom(path)
 
-        if (isRomLoaded &&
-            holder.surface.isValid &&
-            !isRunning) {
+        isRomLoaded = loaded
 
+        if (!loaded) {
+            return false
+        }
+
+        /*
+         * AudioTrack dibuat SETELAH core mengetahui sample rate.
+         */
+        audioTrack?.release()
+        audioTrack = null
+
+        initAudio()
+
+        if (holder.surface.isValid && !isRunning) {
             startLoop()
         }
 
-        return isRomLoaded
+        return true
     }
-
 
     // ========================================================
     // INPUT
@@ -165,44 +211,66 @@ class GbaView @JvmOverloads constructor(
         engine.nativeSendInput(keys)
     }
 
-
     // ========================================================
     // START
     // ========================================================
 
-@Synchronized
-private fun startLoop() {
+    @Synchronized
+    private fun startLoop() {
 
-    if (isRunning) {
-        return
-    }
-
-    if (!holder.surface.isValid) {
-        return
-    }
-
-    isRunning = true
-    frameCount = 0L
-
-    renderThread =
-        Thread(
-            this,
-            "GbaRenderThread"
-        ).apply {
-            priority = Thread.NORM_PRIORITY
-            start()
+        if (isRunning) {
+            return
         }
 
-    audioThread =
-        Thread(
-            { audioLoop() },
-            "GbaAudioThread"
-        ).apply {
-            priority = Thread.NORM_PRIORITY
-            start()
+        if (!holder.surface.isValid) {
+            return
         }
-}
 
+        if (!isRomLoaded) {
+            return
+        }
+
+        isRunning = true
+
+        frameCount = 0L
+
+        /*
+         * AudioTrack JANGAN play() di sini.
+         *
+         * Audio thread akan:
+         *
+         * retro_run()
+         *      ↓
+         * ring buffer terisi
+         *      ↓
+         * prefill
+         *      ↓
+         * AudioTrack.play()
+         */
+        renderThread =
+            Thread(
+                this,
+                "GbaRenderThread"
+            ).apply {
+
+                priority =
+                    Thread.NORM_PRIORITY
+
+                start()
+            }
+
+        audioThread =
+            Thread(
+                { audioLoop() },
+                "GbaAudioThread"
+            ).apply {
+
+                priority =
+                    Thread.NORM_PRIORITY
+
+                start()
+            }
+    }
 
     // ========================================================
     // STOP
@@ -228,17 +296,12 @@ private fun startLoop() {
 
         try {
 
-            if (audioTrack?.state ==
-                AudioTrack.STATE_INITIALIZED) {
-
-                audioTrack?.pause()
-                audioTrack?.flush()
-            }
+            audioTrack?.pause()
+            audioTrack?.flush()
 
         } catch (_: Exception) {
         }
     }
-
 
     // ========================================================
     // RENDER LOOP
@@ -246,51 +309,66 @@ private fun startLoop() {
 
     override fun run() {
 
-        var lastTime =
+        var nextFrameTime =
             System.nanoTime()
-
-        val frameDurationNs =
-            1_000_000_000L / 60L
-
 
         while (isRunning) {
 
             val now =
                 System.nanoTime()
 
-            val elapsed =
-                now - lastTime
-
-
-            if (elapsed >= frameDurationNs) {
+            if (now >= nextFrameTime) {
 
                 if (isRomLoaded &&
                     holder.surface.isValid) {
 
-                    // HANYA emulator + video.
-                    //
-                    // Tidak ada AudioTrack.write()
-                    // di sini lagi.
+                    /*
+                     * Satu retro_run().
+                     *
+                     * Video:
+                     *   callback → frame_buffer
+                     *
+                     * Audio:
+                     *   callback → audio ring buffer
+                     */
                     engine.nativeStepFrame()
 
                     frameCount++
                 }
 
-                lastTime = now
+                /*
+                 * Jadwalkan frame berikutnya berdasarkan
+                 * timeline, bukan sekadar now + frame duration.
+                 *
+                 * Ini mengurangi drift frame.
+                 */
+                nextFrameTime +=
+                    1_000_000_000L / 60L
+
+                /*
+                 * Kalau thread tertinggal sangat jauh,
+                 * jangan mencoba mengejar puluhan frame sekaligus.
+                 */
+                if (now - nextFrameTime >
+                    100_000_000L) {
+
+                    nextFrameTime =
+                        now
+                }
 
             } else {
 
                 val sleepNs =
-                    frameDurationNs - elapsed
+                    nextFrameTime - now
 
                 try {
 
                     if (sleepNs >
-                        1_000_000L) {
+                        2_000_000L) {
 
                         Thread.sleep(
                             sleepNs /
-                                    1_000_000L
+                                1_000_000L
                         )
 
                     } else {
@@ -298,7 +376,9 @@ private fun startLoop() {
                         Thread.yield()
                     }
 
-                } catch (_: InterruptedException) {
+                } catch (
+                    _: InterruptedException
+                ) {
 
                     break
                 }
@@ -306,84 +386,236 @@ private fun startLoop() {
         }
     }
 
-
     // ========================================================
     // AUDIO LOOP
     // ========================================================
 
-private fun audioLoop() {
+    private fun audioLoop() {
 
-    val track =
-        audioTrack ?: return
-
-    try {
-        if (track.state ==
-            AudioTrack.STATE_INITIALIZED) {
-
-            track.play()
-        }
-    } catch (_: Exception) {
-        return
-    }
-
-    while (isRunning) {
-
-        if (isFastForward) {
-            Thread.sleep(5)
-            continue
-        }
+        val track =
+            audioTrack ?: return
 
         if (track.state !=
             AudioTrack.STATE_INITIALIZED) {
+
             return
         }
 
-        try {
+        /*
+         * ====================================================
+         * PHASE 1: PREFILL
+         * ====================================================
+         *
+         * Jangan langsung play().
+         *
+         * Kita tunggu sampai emulator menghasilkan
+         * sejumlah audio yang cukup.
+         */
+        var prefilled =
+            0
 
-            val count =
+        while (
+            isRunning &&
+            prefilled < audioPrefillSamples
+        ) {
+
+            if (isFastForward) {
+
+                /*
+                 * Saat fast-forward audio tidak dimainkan.
+                 * Buang data supaya ring buffer tidak penuh.
+                 */
                 engine.nativeReadAudio(
                     audioBuffer
                 )
 
-            if (count > 0) {
+                Thread.sleep(2)
 
-                var offset = 0
+                continue
+            }
 
-                while (
-                    offset < count &&
-                    isRunning
-                ) {
+            try {
 
-                    val written =
-                        track.write(
-                            audioBuffer,
-                            offset,
-                            count - offset,
-                            AudioTrack.WRITE_BLOCKING
-                        )
+                val count =
+                    engine.nativeReadAudio(
+                        prefillBuffer
+                    )
 
-                    if (written <= 0) {
-                        break
+                if (count > 0) {
+
+                    /*
+                     * Simpan sementara ke AudioTrack.
+                     *
+                     * Kita belum memanggil play().
+                     */
+                    var offset = 0
+
+                    while (
+                        offset < count &&
+                        isRunning
+                    ) {
+
+                        val written =
+                            track.write(
+                                prefillBuffer,
+                                offset,
+                                count - offset,
+                                AudioTrack.WRITE_BLOCKING
+                            )
+
+                        if (written <= 0) {
+                            return
+                        }
+
+                        offset += written
                     }
 
-                    offset += written
+                    prefilled += count
+
+                } else {
+
+                    /*
+                     * Emulator belum menghasilkan cukup audio.
+                     */
+                    Thread.sleep(1)
                 }
+
+            } catch (
+                _: InterruptedException
+            ) {
+
+                return
+
+            } catch (_: Exception) {
+
+                return
+            }
+        }
+
+        if (!isRunning) {
+            return
+        }
+
+        /*
+         * ====================================================
+         * PHASE 2: START PLAYBACK
+         * ====================================================
+         *
+         * Sekarang AudioTrack sudah diprime.
+         */
+        try {
+
+            if (track.state ==
+                AudioTrack.STATE_INITIALIZED) {
+
+                track.play()
 
             } else {
 
-                Thread.sleep(2)
+                return
             }
 
-        } catch (
-            _: InterruptedException
-        ) {
-
-            break
-
         } catch (_: Exception) {
+
+            return
+        }
+
+        /*
+         * ====================================================
+         * PHASE 3: NORMAL AUDIO
+         * ====================================================
+         */
+
+        while (isRunning) {
+
+            if (track.state !=
+                AudioTrack.STATE_INITIALIZED) {
+
+                return
+            }
+
+            /*
+             * Fast-forward:
+             *
+             * jangan kirim audio 3x speed ke speaker.
+             * Cukup drain ring buffer.
+             */
+            if (isFastForward) {
+
+                try {
+
+                    engine.nativeReadAudio(
+                        audioBuffer
+                    )
+
+                    Thread.sleep(2)
+
+                } catch (
+                    _: InterruptedException
+                ) {
+
+                    break
+                }
+
+                continue
+            }
+
+            try {
+
+                val count =
+                    engine.nativeReadAudio(
+                        audioBuffer
+                    )
+
+                if (count > 0) {
+
+                    var offset = 0
+
+                    while (
+                        offset < count &&
+                        isRunning
+                    ) {
+
+                        val written =
+                            track.write(
+                                audioBuffer,
+                                offset,
+                                count - offset,
+                                AudioTrack.WRITE_BLOCKING
+                            )
+
+                        if (written <= 0) {
+                            break
+                        }
+
+                        offset += written
+                    }
+
+                } else {
+
+                    /*
+                     * Tidak ada audio saat ini.
+                     *
+                     * Jangan spin 100% CPU.
+                     */
+                    Thread.sleep(1)
+                }
+
+            } catch (
+                _: InterruptedException
+            ) {
+
+                break
+
+            } catch (_: Exception) {
+
+                /*
+                 * AudioTrack dapat berubah state ketika
+                 * Surface/Activity dihancurkan.
+                 */
+            }
         }
     }
-}
 
     // ========================================================
     // SURFACE CREATED
@@ -404,7 +636,6 @@ private fun audioLoop() {
         }
     }
 
-
     // ========================================================
     // SURFACE CHANGED
     // ========================================================
@@ -421,7 +652,6 @@ private fun audioLoop() {
         )
     }
 
-
     // ========================================================
     // SURFACE DESTROYED
     // ========================================================
@@ -434,7 +664,6 @@ private fun audioLoop() {
 
         engine.nativeSetSurface(null)
     }
-
 
     // ========================================================
     // DETACHED

@@ -9,21 +9,29 @@ class GbaEngine {
     }
 
     external fun nativeInit()
-    external fun nativeLoadRom(romPath: String): Boolean
 
-    // VIDEO
-    external fun nativeSetSurface(surface: Surface?)
+    external fun nativeLoadRom(
+        romPath: String
+    ): Boolean
+
+    external fun nativeSetSurface(
+        surface: Surface?
+    )
+
     external fun nativeStepFrame()
 
-    // INPUT
-    external fun nativeSendInput(keys: Int)
+    external fun nativeSendInput(
+        keys: Int
+    )
 
-    // AUDIO
-    external fun nativeReadAudio(buffer: ShortArray): Int
+    external fun nativeReadAudio(
+        buffer: ShortArray
+    ): Int
 
     external fun nativeGetAudioSampleRate(): Int
 
     companion object {
+
         @JvmStatic
         external fun nativeDebugInfo(): String
     }
