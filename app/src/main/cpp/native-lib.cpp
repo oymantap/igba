@@ -24,6 +24,8 @@ static uint16_t g_input_state = 0;
 static enum retro_pixel_format g_pixel_format =
         RETRO_PIXEL_FORMAT_0RGB1555;
 
+static double g_audio_sample_rate = 32000.0;
+
 static ANativeWindow* g_native_window = nullptr;
 static std::mutex g_window_mutex;
 
@@ -263,16 +265,79 @@ static size_t audio_sample_batch_callback(
         const int16_t* data,
         size_t frames) {
 
-    if (!data) {
+    if (!data || frames == 0) {
         return 0;
     }
 
-    for (size_t i = 0; i < frames; i++) {
+    std::lock_guard<std::mutex> lock(g_audio_mutex);
 
-        push_audio_sample(
-                data[i * 2],
-                data[i * 2 + 1]);
+    const size_t totalSamples = frames * 2;
+
+    // Kalau data lebih besar dari seluruh ring buffer,
+    // ambil bagian paling belakang saja.
+    if (totalSamples >= AUDIO_RING_BUFFER_SIZE) {
+
+        data += totalSamples - AUDIO_RING_BUFFER_SIZE;
+
+        // Pastikan jumlah sample tidak melebihi buffer.
+        const size_t samplesToCopy =
+                AUDIO_RING_BUFFER_SIZE;
+
+        memcpy(
+                g_audio_ring,
+                data,
+                samplesToCopy * sizeof(int16_t));
+
+        g_audio_head = 0;
+        g_audio_tail = 0;
+        g_audio_count = samplesToCopy;
+
+        return frames;
     }
+
+    // Buang sample lama kalau ruang tidak cukup.
+    const size_t freeSpace =
+            AUDIO_RING_BUFFER_SIZE - g_audio_count;
+
+    if (totalSamples > freeSpace) {
+
+        const size_t drop =
+                totalSamples - freeSpace;
+
+        g_audio_head =
+                (g_audio_head + drop)
+                % AUDIO_RING_BUFFER_SIZE;
+
+        g_audio_count -= drop;
+    }
+
+    // Copy bagian pertama sampai ujung buffer.
+    const size_t first =
+            std::min(
+                    totalSamples,
+                    AUDIO_RING_BUFFER_SIZE - g_audio_tail);
+
+    memcpy(
+            &g_audio_ring[g_audio_tail],
+            data,
+            first * sizeof(int16_t));
+
+    // Kalau melewati ujung ring buffer,
+    // lanjut dari index 0.
+    if (totalSamples > first) {
+
+        memcpy(
+                g_audio_ring,
+                data + first,
+                (totalSamples - first) *
+                        sizeof(int16_t));
+    }
+
+    g_audio_tail =
+            (g_audio_tail + totalSamples)
+            % AUDIO_RING_BUFFER_SIZE;
+
+    g_audio_count += totalSamples;
 
     return frames;
 }
@@ -439,6 +504,22 @@ Java_com_rycl_igba_GbaEngine_nativeLoadRom(
 
     bool loaded =
             retro_load_game(&game_info);
+
+if (loaded) {
+    retro_system_av_info avInfo{};
+
+    retro_get_system_av_info(&avInfo);
+
+    if (avInfo.timing.sample_rate > 0.0) {
+        g_audio_sample_rate =
+                avInfo.timing.sample_rate;
+
+        LOGI(
+            "Core audio sample rate: %.2f Hz",
+            g_audio_sample_rate
+        );
+    }
+}
 
     free(buffer);
 
@@ -648,6 +729,16 @@ Java_com_rycl_igba_GbaEngine_nativeReadAudio(
     return static_cast<jint>(samples);
 }
 
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_rycl_igba_GbaEngine_nativeGetAudioSampleRate(
+        JNIEnv* env,
+        jobject thiz) {
+
+    return static_cast<jint>(
+            g_audio_sample_rate + 0.5
+    );
+}
 
 // ============================================================
 // DEBUG

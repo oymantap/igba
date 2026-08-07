@@ -21,6 +21,8 @@ class GbaEngine {
     // AUDIO
     external fun nativeReadAudio(buffer: ShortArray): Int
 
+    external fun nativeGetAudioSampleRate(): Int
+
     companion object {
         @JvmStatic
         external fun nativeDebugInfo(): String
